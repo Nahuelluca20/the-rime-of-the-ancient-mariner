@@ -14,8 +14,11 @@
 	},
 	"devDependencies": {
 		"@biomejs/biome": "^1.9.4",
+		"@earendil-works/pi-coding-agent": "^0.75.3",
+		"@types/node": "^25.9.0",
 		"husky": "^9.1.7",
 		"lint-staged": "^16.4.0",
+		"typebox": "^1.1.38",
 		"typescript": "^5.8.3"
 	},
 	"pi": {
@@ -28,7 +31,9 @@
 		"*.{js,ts,json,md}": "biome check --write --no-errors-on-unmatched"
 	},
 	"dependencies": {
-		"better-sqlite3": "^12.10.0",
-		"effect": "^3.21.2"
-	}
+		"@effect/platform": "^0.96.1",
+		"@effect/platform-node": "^0.106.0",
+		"better-sqlite3": "^12.10.0"
+	},
+	"trustedDependencies": ["@biomejs/biome", "@google/genai", "@parcel/watcher", "protobufjs"]
 }
