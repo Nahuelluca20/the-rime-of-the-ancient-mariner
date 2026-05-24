@@ -1,6 +1,8 @@
 import { sql } from "drizzle-orm";
 import { integer, sqliteTable, text, uniqueIndex } from "drizzle-orm/sqlite-core";
 
+export type AgentMemoryData = Record<string, unknown>;
+
 export const projects = sqliteTable(
 	"projects",
 	{
@@ -10,8 +12,6 @@ export const projects = sqliteTable(
 	},
 	(t) => [uniqueIndex("projects_name_unique").on(t.name)],
 );
-
-export type AgentMemoryData = Record<string, unknown>;
 
 export const agentMemories = sqliteTable("agent_memories", {
 	id: integer("id").primaryKey({ autoIncrement: true }),

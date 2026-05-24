@@ -8,7 +8,7 @@
 
 `the-ancient-mariner` is a [pi](https://pi.dev) package — a plugin for the pi coding agent. It extends pi with custom tools, commands, event handlers, skills, prompts, and themes.
 
-This package uses **Effect-TS** as its primary async/effect system and **better-sqlite3** for local data storage. The MVP goal is knowledge tracking: detecting stale code, storing summaries, and enabling search/retrieval.
+The MVP goal (`docs/mvp.md`) is **knowledge tracking**: detecting stale code, storing summaries, and enabling search/retrieval over agent memories. Persistence is local via SQLite + Drizzle.
 
 ---
 
@@ -17,10 +17,10 @@ This package uses **Effect-TS** as its primary async/effect system and **better-
 | Layer | Technology |
 |-------|------------|
 | Language | TypeScript 5.8+ (ES2022, strict mode) |
-| Effects / Async | [Effect-TS](https://effect.website/) |
-| Platform APIs | `@effect/platform` + `@effect/platform-node` |
-| Validation / Schemas | [Typebox](https://github.com/sinclairzx81/typebox) |
-| Local DB | [better-sqlite3](https://github.com/WiseLibs/better-sqlite3) |
+| Async | Plain `async`/`await` (no Effect-TS) |
+| Validation / Schemas | [TypeBox](https://github.com/sinclairzx81/typebox) |
+| Local DB | [better-sqlite3](https://github.com/WiseLibs/better-sqlite3) (sync) |
+| ORM / Migrations | [Drizzle ORM](https://orm.drizzle.team/) + drizzle-kit |
 | Package Runtime | [pi-coding-agent](https://www.npmjs.com/package/@earendil-works/pi-coding-agent) SDK |
 | Bundler / Runtime | Bun |
 | Lint & Format | [Biome](https://biomejs.dev/) 1.9.4 |
@@ -32,22 +32,37 @@ This package uses **Effect-TS** as its primary async/effect system and **better-
 
 ```
 the-ancient-mariner/
-├── src/                  # Core TypeScript source
-│   └── example.ts        # Entry-point / demo program
-├── extensions/           # pi extensions (tools, commands, event handlers)
-│   └── example-effect.ts # Canonical example of an Effect-TS extension
-├── skills/               # pi skills (empty — add `.md` skill files here)
-├── prompts/              # pi prompt templates (empty — add `.md` prompts here)
-├── docs/                 # Project documentation
-│   └── mvp.md            # MVP requirements doc
-├── dist/                 # Compiled output (gitignored, do not edit)
-├── package.json          # pi package manifest + npm config
-├── tsconfig.json         # TypeScript config (NodeNext, ESM, declarations)
-├── biome.json            # Biome formatter + linter config
-└── AGENTS.md             # This file
+├── src/                       # Domain layer (compiled by tsc)
+│   ├── memory/
+│   │   ├── schema.ts          # Drizzle schema (internal)
+│   │   ├── types.ts           # Public type re-exports
+│   │   └── store.ts           # MemoryStore: openMemoryStore() + domain ops
+│   ├── session/
+│   │   └── info.ts            # getSessionInfo(ctx) — single source for session metadata
+│   └── db/
+│       └── connection.ts      # openDb() — internal; only memory/store imports it
+├── extensions/                # pi extensions (runtime-loaded; not compiled)
+│   ├── lifecycle.ts           # session_start + resources_discover
+│   ├── memory-extension.ts        # tools backed by src/memory
+│   └── session-extension.ts       # tool + command backed by src/session
+├── migrations/                # Drizzle migrations (generated from src/memory/schema.ts)
+├── skills/                    # pi skills (empty — add .md skill files here)
+├── prompts/                   # pi prompt templates
+├── themes/                    # pi themes
+├── docs/
+│   └── mvp.md                 # MVP requirements
+├── dist/                      # Compiled output (gitignored, vestigial — no consumer)
+├── drizzle.config.ts          # Drizzle CLI config (schema path lives here)
+├── package.json               # pi package manifest
+├── tsconfig.json              # TypeScript config (NodeNext, ESM, declarations)
+├── biome.json                 # Biome formatter + linter config
+└── AGENTS.md                  # This file
 ```
 
-**Key:** `src/` compiles to `dist/` via `tsc`. `extensions/`, `skills/`, `prompts/` are consumed by pi at runtime via the paths declared in `package.json` under the `"pi"` key.
+**Rule of thumb:**
+- **`src/`** holds domain logic behind named interfaces (`MemoryStore`, `getSessionInfo`). Compiled by `tsc`. ESM + NodeNext → relative imports in compiled output need `.js` suffixes.
+- **`extensions/`, `skills/`, `prompts/`, `themes/`** are consumed by pi **at runtime** via paths declared in `package.json["pi"]`. They are **not** built by `tsc`; pi loads `.ts` directly. That's why extensions can `import { openMemoryStore } from "../src/memory/store.ts"` with a `.ts` extension.
+- Extensions should stay thin: register tools/commands/events and delegate to `src/`.
 
 ---
 
@@ -69,29 +84,24 @@ bun run lint:fix  # check + auto-fix
 bun run format    # format only
 ```
 
-### 4.2 Effect-TS Patterns
+### 4.2 Async patterns
 
-Use `Effect.gen` for sequential effectful code. Provide platform layers explicitly. Always run with `Effect.runPromise` (or `runPromiseExit`) at the edge.
+Use plain `async`/`await`. Side effects (file I/O, DB queries via Drizzle, etc.) are awaited or executed synchronously (better-sqlite3 is sync). No Effect-TS, no platform layers.
 
 ```typescript
-import { Console, Effect } from "effect";
-import { FileSystem } from "@effect/platform";
-import { NodeFileSystem } from "@effect/platform-node";
+import { readFile } from "node:fs/promises";
 
-const program = Effect.gen(function* () {
-	const fs = yield* FileSystem.FileSystem;
-	const content = yield* fs.readFileString("./file.txt");
-	yield* Console.log(content);
-	return content.length;
-});
-
-const runnable = Effect.provide(program, NodeFileSystem.layer);
-const result = await Effect.runPromise(runnable);
+async function countLines(path: string): Promise<number> {
+	const content = await readFile(path, "utf8");
+	return content.split("\n").length;
+}
 ```
 
-### 4.3 Typebox Schemas (Extensions)
+For shared resources (DB connection, store handles), initialize lazily at first use and cache at module level. See `src/memory/store.ts` for the pattern.
 
-When registering pi tools, define parameters with Typebox:
+### 4.3 TypeBox Schemas (Extensions)
+
+When registering pi tools, define parameters with TypeBox:
 
 ```typescript
 import { Type } from "typebox";
@@ -114,11 +124,14 @@ Every extension file exports a default function receiving `ExtensionAPI`:
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
 export default function (pi: ExtensionAPI) {
-	// register tools, commands, events
+	// register tools, commands, events — delegate logic to src/
 }
 ```
 
-See `extensions/example-effect.ts` for a full working example.
+Canonical examples in this repo:
+- `extensions/memory-extension.ts` — tool registration
+- `extensions/lifecycle.ts` — `session_start` + `resources_discover`
+- `extensions/session-extension.ts` — tool + command sharing logic via `src/session/info.ts`
 
 ---
 
@@ -131,33 +144,37 @@ See `extensions/example-effect.ts` for a full working example.
 | `bun run lint` | Run Biome linter |
 | `bun run lint:fix` | Run Biome linter + auto-fix |
 | `bun run format` | Run Biome formatter |
+| `bun run db:generate` | Emit a new Drizzle migration from `src/memory/schema.ts` |
+| `bun run db:studio` | Open Drizzle Studio against `rime-ancient-mariner.db` |
 
 **Pre-commit:** Husky runs `lint-staged` on `*.{js,ts,json,md}` via `biome check --write --no-errors-on-unmatched`.
 
 ---
 
-## 6. Extension Development
+## 6. Persistence Layer
 
-The canonical reference is **`extensions/example-effect.ts`**. It demonstrates three patterns:
+- **`src/memory/schema.ts`** — Drizzle schema (internal). Tables: `projects` (unique `name`) and `agent_memories` (JSON `data`, FK to `projects`, cascade delete). Exports `AgentMemoryData` and inferred row types.
+- **`src/memory/types.ts`** — public type re-exports. Consumers import from here, not from `schema.ts`.
+- **`src/memory/store.ts`** — `openMemoryStore(path?)` returns a `MemoryStore` with domain operations (`getOrCreateProject`, `putMemory`). Lazy + cached: first call opens sqlite and runs migrations; subsequent calls return the cached instance.
+- **`src/db/connection.ts`** — `openDb(path)` opens better-sqlite3, wraps in Drizzle, runs migrations. Internal; only `memory/store.ts` imports it. Extensions never touch Drizzle directly.
 
-1. **Tool** — `pi.registerTool()` with Effect-TS execution
-2. **Command** — `pi.registerCommand()` callable from pi's UI
-3. **Event handler** — `pi.on("session_start", ...)`
+Schema change workflow:
+1. Edit `src/memory/schema.ts`
+2. Run `bun run db:generate`
+3. Commit the new migration file alongside the schema change
 
-Guidelines:
-- Keep effects pure; push side-effects into `Effect.sync` or platform layers.
-- Provide Node-specific layers (e.g., `NodeFileSystem.layer`) before running.
-- Return structured tool results with `content: [{ type: "text", text: "..." }]` and optional `details`.
+Default DB file: `rime-ancient-mariner.db` at the repo root.
 
 ---
 
 ## 7. Testing / Verification
 
-There is **no test framework** configured yet. Verify changes by:
+There is **no test framework** configured. Verify changes by:
 
-1. Building: `bun run build` (must produce clean `dist/`)
-2. Linting: `bun run lint` (must pass with zero errors)
-3. For extensions: load the package in pi and exercise the tool/command interactively.
+1. **Build**: `bun run build` (must compile cleanly)
+2. **Lint**: `bun run lint` (must pass with zero errors)
+3. **DB sanity**: `bun run db:generate` — no spurious migration if schema unchanged
+4. **Extensions**: load the package in pi and exercise the tool/command interactively
 
 ---
 
@@ -166,30 +183,31 @@ There is **no test framework** configured yet. Verify changes by:
 - **Skills**: Add Markdown files to `skills/`. pi consumes them as context-injection skill files.
 - **Prompts**: Add Markdown files to `prompts/`. pi loads them as prompt templates.
 
-Both directories are referenced in `package.json` → `"pi"` and are currently empty — ready for incremental additions.
+Both directories are referenced in `package.json` → `"pi"`.
 
 ---
 
 ## 9. Key Dependencies
 
 ### Runtime
-- `@effect/platform` & `@effect/platform-node` — Effect platform abstractions
 - `better-sqlite3` — Synchronous SQLite driver
-- `@earendil-works/pi-coding-agent` — pi SDK types and APIs
+- `drizzle-orm` — ORM and query builder
+- `@earendil-works/pi-coding-agent` — pi SDK types and APIs (devDependency)
 
 ### Dev
 - `typescript` — Compiler
+- `drizzle-kit` — Migration generator + Drizzle Studio
 - `@biomejs/biome` — Linter / formatter
 - `husky` + `lint-staged` — Git hooks
-- `@types/node` — Node type definitions
+- `@types/node`, `@types/better-sqlite3` — Type definitions
 - `typebox` — JSON Schema builder
 
 ---
 
 ## 10. Notes / Gotchas
 
-- **ESM only**: `package.json` has `"type": "module"`. Use `.ts` for source, `.js` for compiled imports.
-- **NodeNext resolution**: `tsconfig.json` sets `"module": "NodeNext"` and `"moduleResolution": "NodeNext"`. Import paths must include `.js` extensions in compiled output (TypeScript handles this).
-- **Do not commit `dist/`**: It is gitignored; it is rebuilt by `tsc`.
-- **Do not commit `node_modules/`**: Gitignored.
-- **Context from `docs/mvp.md`**: The MVP targets knowledge tracking (staleness detection, search, summary, store). Future extensions should align with that direction.
+- **ESM only**: `package.json` has `"type": "module"`. Source is `.ts`; compiled imports use `.js`.
+- **NodeNext resolution**: `tsconfig.json` sets `"module": "NodeNext"` and `"moduleResolution": "NodeNext"`. Compiled-output imports need `.js` extensions.
+- **Extensions import `.ts` directly** because pi loads them at runtime without `tsc`. Do not change those imports to `.js`.
+- **`dist/` is vestigial**: `tsc` compiles `src/` to it, but `package.json` has no `main`/`exports` field — nobody consumes it. Don't commit it; don't depend on it.
+- **MVP direction (`docs/mvp.md`)**: knowledge tracking — staleness detection, search, summary, store. New tools should live in `extensions/memory-extension.ts` and delegate to `src/memory/`.

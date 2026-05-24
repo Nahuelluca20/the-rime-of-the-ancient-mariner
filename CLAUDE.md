@@ -17,7 +17,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | `bun run lint` | Biome check |
 | `bun run lint:fix` | Biome check + auto-fix |
 | `bun run format` | Biome format |
-| `bun run db:generate` | Emit a new Drizzle migration into `migrations/` from `db/schema.ts` |
+| `bun run db:generate` | Emit a new Drizzle migration into `migrations/` from `src/memory/schema.ts` |
 | `bun run db:studio` | Open Drizzle Studio against the local SQLite DB |
 
 There is **no test framework configured**. Verify changes by building, linting, and exercising extensions inside pi.
@@ -26,9 +26,11 @@ There is **no test framework configured**. Verify changes by building, linting, 
 
 This repo has **two distinct execution surfaces**, which is the most important thing to understand before editing:
 
-1. **`src/`** — compiled to `dist/` by `tsc` (`tsconfig.json` sets `rootDir: ./src`). Currently only contains `example.ts`. Anything here follows ESM + NodeNext rules: relative imports in compiled output need `.js` suffixes.
+1. **`src/`** — domain layer. Compiled to `dist/` by `tsc` (`tsconfig.json` sets `rootDir: ./src`). Holds reusable logic that extensions delegate to: `src/memory/` (knowledge store), `src/session/` (session metadata), `src/db/` (sqlite connection, internal). Relative imports in compiled output need `.js` suffixes per ESM + NodeNext.
 
-2. **`extensions/`, `skills/`, `prompts/`, `themes/`** — consumed by pi **at runtime** via the paths declared in `package.json` under the `"pi"` key. These are **not** built by `tsc`; pi loads the `.ts` files directly. That is why `extensions/example-typebox.ts` can import `../db/index.ts` with a `.ts` extension — it never goes through the TypeScript compiler.
+2. **`extensions/`, `skills/`, `prompts/`, `themes/`** — consumed by pi **at runtime** via the paths declared in `package.json` under the `"pi"` key. These are **not** built by `tsc`; pi loads the `.ts` files directly. That's why extensions can import `../src/memory/store.ts` with a `.ts` extension — those imports never go through the TypeScript compiler.
+
+Rule of thumb: business logic lives in `src/`, behind named interfaces. Extension files register tools/commands/events and delegate to `src/`.
 
 ### Extension shape
 
@@ -42,16 +44,16 @@ export default function (pi: ExtensionAPI) {
 }
 ```
 
-Canonical example: `extensions/example-typebox.ts`. Tool parameter schemas use **TypeBox** (`typebox`), not Zod.
+Canonical examples: `extensions/memory-extension.ts` (tool registration), `extensions/lifecycle.ts` (event handlers), `extensions/session-extension.ts` (tool + command sharing logic from `src/session/info.ts`). Tool parameter schemas use **TypeBox** (`typebox`), not Zod. Use plain `async`/`await` — no Effect-TS at the extension boundary.
 
 ### Persistence layer
 
-- `db/schema.ts` — Drizzle schema. Current tables: `projects` (unique `name`) and `agent_memories` (JSON `data` column, FK to `projects` with cascade delete). Exports inferred row types (`Project`, `AgentMemory`, `New*`).
-- `db/index.ts` — exposes `initDb(path = "rime-ancient-mariner.db")`. It opens `better-sqlite3`, wraps it in `drizzle()`, and **runs migrations automatically** from the `migrations/` folder before returning the `Db` handle.
-- Schema change workflow: edit `db/schema.ts` → `bun run db:generate` → commit the new migration file alongside the schema change.
-- Default DB file lives at the repo root as `rime-ancient-mariner.db`.
-
-> Note: `AGENTS.md` §4.2 describes Effect-TS patterns, but the live extension (`extensions/example-typebox.ts`) uses plain async/await + TypeBox. Prefer the example file as the source of truth for new extension code.
+- `src/memory/schema.ts` — Drizzle schema (internal to the memory module). Tables: `projects` (unique `name`) and `agent_memories` (JSON `data`, FK to `projects` with cascade delete). Exports inferred row types and `AgentMemoryData`.
+- `src/memory/types.ts` — public type re-exports for consumers.
+- `src/memory/store.ts` — `openMemoryStore(path?)` returns a `MemoryStore` with domain ops (`getOrCreateProject`, `putMemory`). The store is lazy-initialized and cached at module level — first call opens sqlite and runs migrations; subsequent calls return the cached instance. Extensions never touch Drizzle directly.
+- `src/db/connection.ts` — `openDb(path)` opens `better-sqlite3`, wraps in Drizzle, and **runs migrations automatically** before returning. Internal; only `memory/store.ts` imports it.
+- Schema change workflow: edit `src/memory/schema.ts` → `bun run db:generate` → commit the new migration alongside the schema change.
+- Default DB file: `rime-ancient-mariner.db` at the repo root.
 
 ## Conventions & gotchas
 
