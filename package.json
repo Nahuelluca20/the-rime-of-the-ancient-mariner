@@ -15,7 +15,9 @@
 	"devDependencies": {
 		"@biomejs/biome": "^1.9.4",
 		"@earendil-works/pi-coding-agent": "^0.75.3",
+		"@types/better-sqlite3": "^7.6.13",
 		"@types/node": "^25.9.0",
+		"drizzle-kit": "^0.31.10",
 		"husky": "^9.1.7",
 		"lint-staged": "^16.4.0",
 		"typebox": "^1.1.38",
@@ -31,7 +33,8 @@
 		"*.{js,ts,json,md}": "biome check --write --no-errors-on-unmatched"
 	},
 	"dependencies": {
-		"better-sqlite3": "^12.10.0"
+		"better-sqlite3": "^12.10.0",
+		"drizzle-orm": "^0.45.2"
 	},
 	"trustedDependencies": ["@biomejs/biome", "@google/genai", "@parcel/watcher", "protobufjs"]
 }

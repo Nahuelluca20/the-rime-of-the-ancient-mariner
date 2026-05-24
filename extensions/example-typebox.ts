@@ -3,8 +3,11 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
+import { type Db, initDb } from "../db/index.ts";
 
 export default function (pi: ExtensionAPI) {
+	let db: Db;
+
 	// ── Custom tool using plain TS + TypeBox ──
 	pi.registerTool({
 		name: "count_lines",
@@ -37,6 +40,13 @@ export default function (pi: ExtensionAPI) {
 
 	// ── Event handler using plain TS ──
 	pi.on("session_start", async (_event, ctx) => {
+		try {
+			db = initDb();
+			ctx.ui.notify("DB ready", "info");
+		} catch (err) {
+			ctx.ui.notify(`DB init failed: ${(err as Error).message}`, "error");
+			return;
+		}
 		const date = new Date().toISOString();
 		ctx.ui.notify(`Session started at ${date}`, "info");
 	});
