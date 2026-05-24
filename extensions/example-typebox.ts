@@ -39,7 +39,7 @@ export default function (pi: ExtensionAPI) {
 	});
 
 	// ── Event handler using plain TS ──
-	pi.on("session_start", async (_event, ctx) => {
+	pi.on("session_start", async (event, ctx) => {
 		try {
 			db = initDb();
 			ctx.ui.notify("DB ready", "info");
@@ -48,7 +48,7 @@ export default function (pi: ExtensionAPI) {
 			return;
 		}
 		const date = new Date().toISOString();
-		ctx.ui.notify(`Session started at ${date}`, "info");
+		ctx.ui.notify(`Session started at ${date} ${event}`, "info");
 	});
 
 	const baseDir = dirname(fileURLToPath(import.meta.url));
