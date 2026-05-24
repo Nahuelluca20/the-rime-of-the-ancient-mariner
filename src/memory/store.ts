@@ -1,9 +1,9 @@
 import { eq } from "drizzle-orm";
-import { openDb } from "../db/connection.js";
-import { agentMemories, projects } from "./schema.js";
-import type { AgentMemory, AgentMemoryData, Project } from "./types.js";
+import { openDb } from "../db/connection.ts";
+import { agentMemories, projects } from "./schema.ts";
+import type { AgentMemory, AgentMemoryData, Project } from "./types.ts";
 
-export type { AgentMemory, AgentMemoryData, Project } from "./types.js";
+export type { AgentMemory, AgentMemoryData, Project } from "./types.ts";
 
 export interface MemoryStore {
 	getOrCreateProject(name: string): Project;

@@ -4,4 +4,4 @@ export type {
 	NewAgentMemory,
 	NewProject,
 	Project,
-} from "./schema.js";
+} from "./schema.ts";
