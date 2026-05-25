@@ -5,14 +5,19 @@ import type { AgentMemory, AgentMemoryData, Project } from "./types.ts";
 
 export type { AgentMemory, AgentMemoryData, Project } from "./types.ts";
 
-export interface PutMemoryResult {
+export interface CreateMemoryResult {
 	memory: AgentMemory;
 	created: boolean;
 }
 
+export type UpdateMemoryResult =
+	| { memory: AgentMemory; updated: true }
+	| { memory: null; updated: false };
+
 export interface MemoryStore {
 	getOrCreateProject(name: string): Project;
-	putMemory(projectName: string, name: string, data: AgentMemoryData): PutMemoryResult;
+	createMemory(projectName: string, name: string, data: AgentMemoryData): CreateMemoryResult;
+	updateMemory(projectName: string, name: string, data: AgentMemoryData): UpdateMemoryResult;
 }
 
 let cached: MemoryStore | undefined;
@@ -29,7 +34,7 @@ export function openMemoryStore(path?: string): MemoryStore {
 			return db.insert(projects).values({ name }).returning().get();
 		},
 
-		putMemory(projectName, name, data) {
+		createMemory(projectName, name, data) {
 			const project = this.getOrCreateProject(projectName);
 			const inserted = db
 				.insert(agentMemories)
@@ -46,10 +51,22 @@ export function openMemoryStore(path?: string): MemoryStore {
 				.get();
 			if (!existing) {
 				throw new Error(
-					`putMemory: insert conflict on (${projectName}, ${name}) but no existing row found`,
+					`createMemory: insert conflict on (${projectName}, ${name}) but no existing row found`,
 				);
 			}
 			return { memory: existing, created: false };
+		},
+
+		updateMemory(projectName, name, data) {
+			const project = this.getOrCreateProject(projectName);
+			const updated = db
+				.update(agentMemories)
+				.set({ data })
+				.where(and(eq(agentMemories.projectId, project.id), eq(agentMemories.name, name)))
+				.returning()
+				.get();
+			if (updated) return { memory: updated, updated: true };
+			return { memory: null, updated: false };
 		},
 	};
 
