@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX `agent_memories_project_name_unique` ON `agent_memories` (`project_id`,`name`);

@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
+import { saveSession } from "../src/memory/save-session.ts";
 
 export default function (pi: ExtensionAPI) {
 	pi.registerTool({
@@ -18,6 +19,14 @@ export default function (pi: ExtensionAPI) {
 				content: [{ type: "text", text: `${lines} lines in ${params.path}` }],
 				details: { lines, path: params.path },
 			};
+		},
+	});
+
+	pi.registerCommand("save-info", {
+		description: "Save the current session into the memory store",
+		handler: async (_args, ctx) => {
+			const { message, severity } = saveSession(ctx);
+			ctx.ui.notify(message, severity);
 		},
 	});
 }

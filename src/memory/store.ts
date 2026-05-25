@@ -1,13 +1,18 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { openDb } from "../db/connection.ts";
 import { agentMemories, projects } from "./schema.ts";
 import type { AgentMemory, AgentMemoryData, Project } from "./types.ts";
 
 export type { AgentMemory, AgentMemoryData, Project } from "./types.ts";
 
+export interface PutMemoryResult {
+	memory: AgentMemory;
+	created: boolean;
+}
+
 export interface MemoryStore {
 	getOrCreateProject(name: string): Project;
-	putMemory(projectName: string, name: string, data: AgentMemoryData): AgentMemory;
+	putMemory(projectName: string, name: string, data: AgentMemoryData): PutMemoryResult;
 }
 
 let cached: MemoryStore | undefined;
@@ -26,11 +31,25 @@ export function openMemoryStore(path?: string): MemoryStore {
 
 		putMemory(projectName, name, data) {
 			const project = this.getOrCreateProject(projectName);
-			return db
+			const inserted = db
 				.insert(agentMemories)
 				.values({ name, projectId: project.id, data })
+				.onConflictDoNothing({ target: [agentMemories.projectId, agentMemories.name] })
 				.returning()
 				.get();
+			if (inserted) return { memory: inserted, created: true };
+
+			const existing = db
+				.select()
+				.from(agentMemories)
+				.where(and(eq(agentMemories.projectId, project.id), eq(agentMemories.name, name)))
+				.get();
+			if (!existing) {
+				throw new Error(
+					`putMemory: insert conflict on (${projectName}, ${name}) but no existing row found`,
+				);
+			}
+			return { memory: existing, created: false };
 		},
 	};
 
