@@ -2,6 +2,8 @@ import { readFile } from "node:fs/promises";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { saveSession, updateSession } from "../src/memory/session-commands.ts";
+import { saveSessionSummary } from "../src/memory/session-summary.ts";
+import { openMemoryStore } from "../src/memory/store.ts";
 
 export default function (pi: ExtensionAPI) {
 	pi.registerTool({
@@ -22,11 +24,79 @@ export default function (pi: ExtensionAPI) {
 		},
 	});
 
-	pi.registerCommand("save-info", {
-		description: "Save the current session into the memory store",
-		handler: async (_args, ctx) => {
-			const { message, severity } = saveSession(ctx);
-			ctx.ui.notify(message, severity);
+	pi.registerTool({
+		name: "get_memory",
+		label: "Get Memory",
+		description: "Retrieve a specific memory by name from the ancient-mariner store",
+		parameters: Type.Object({
+			project: Type.String({ description: "Project name" }),
+			name: Type.String({ description: "Memory name" }),
+		}),
+		async execute(_toolCallId, params, _signal, _onUpdate, _ctx) {
+			const store = openMemoryStore();
+			const memory = store.getMemory(params.project, params.name);
+			if (!memory) {
+				return {
+					content: [
+						{
+							type: "text",
+							text: `Memory "${params.name}" not found in project "${params.project}".`,
+						},
+					],
+					details: null,
+				};
+			}
+			return {
+				content: [{ type: "text", text: JSON.stringify(memory.data, null, 2) }],
+				details: memory,
+			};
+		},
+	});
+
+	pi.registerTool({
+		name: "list_memories",
+		label: "List Memories",
+		description: "List all stored memories for a given project",
+		parameters: Type.Object({
+			project: Type.String({ description: "Project name" }),
+		}),
+		async execute(_toolCallId, params, _signal, _onUpdate, _ctx) {
+			const store = openMemoryStore();
+			const memories = store.listMemories(params.project);
+			const names = memories.map(
+				(m) => `- ${m.name} (updated: ${m.updatedAt?.toISOString() ?? "unknown"})`,
+			);
+			return {
+				content: [
+					{
+						type: "text",
+						text:
+							names.length > 0
+								? names.join("\n")
+								: `No memories found for project "${params.project}".`,
+					},
+				],
+				details: memories,
+			};
+		},
+	});
+
+	pi.registerTool({
+		name: "save_session_summary",
+		label: "Save Session Summary",
+		description:
+			"Persist a {title, description, context} summary into the current session's memory row.",
+		parameters: Type.Object({
+			title: Type.String(),
+			description: Type.String(),
+			context: Type.String(),
+		}),
+		async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
+			const { message, severity } = saveSessionSummary(ctx, params);
+			return {
+				content: [{ type: "text", text: message }],
+				details: { severity, ...params },
+			};
 		},
 	});
 

@@ -18,6 +18,8 @@ export interface MemoryStore {
 	getOrCreateProject(name: string): Project;
 	createMemory(projectName: string, name: string, data: AgentMemoryData): CreateMemoryResult;
 	updateMemory(projectName: string, name: string, data: AgentMemoryData): UpdateMemoryResult;
+	getMemory(projectName: string, name: string): AgentMemory | null;
+	listMemories(projectName: string): AgentMemory[];
 }
 
 let cached: MemoryStore | undefined;
@@ -67,6 +69,22 @@ export function openMemoryStore(path?: string): MemoryStore {
 				.get();
 			if (updated) return { memory: updated, updated: true };
 			return { memory: null, updated: false };
+		},
+
+		getMemory(projectName, name) {
+			const project = this.getOrCreateProject(projectName);
+			return (
+				db
+					.select()
+					.from(agentMemories)
+					.where(and(eq(agentMemories.projectId, project.id), eq(agentMemories.name, name)))
+					.get() ?? null
+			);
+		},
+
+		listMemories(projectName) {
+			const project = this.getOrCreateProject(projectName);
+			return db.select().from(agentMemories).where(eq(agentMemories.projectId, project.id)).all();
 		},
 	};
 

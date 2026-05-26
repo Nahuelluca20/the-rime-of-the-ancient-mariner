@@ -8,13 +8,13 @@ export interface SessionCommandResult {
 	severity: "info" | "warning";
 }
 
-interface ResolvedSession {
+export interface ResolvedSession {
 	projectName: string;
 	name: string;
 	data: AgentMemoryData;
 }
 
-function resolveSession(ctx: ExtensionContext): ResolvedSession | SessionCommandResult {
+export function resolveSession(ctx: ExtensionContext): ResolvedSession | SessionCommandResult {
 	const info = getSessionInfo(ctx);
 	if (!info.sessionName) {
 		return {

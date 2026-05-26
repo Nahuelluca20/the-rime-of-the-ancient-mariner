@@ -12,6 +12,7 @@ export default function (pi: ExtensionAPI) {
 	pi.on("resources_discover", async (_event, _ctx) => {
 		return {
 			promptPaths: [join(baseDir, "..", "prompts")],
+			skillPaths: [join(baseDir, "..", "skills")],
 		};
 	});
 }
