@@ -1,0 +1,302 @@
+import { readFile } from "node:fs/promises";
+import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import { Type } from "typebox";
+import { isReadOnlyBashCommand } from "./bash-safety.ts";
+import { buildPlanInfo, renderPlanPrompt } from "./prompt.ts";
+
+const STATE_ENTRY_TYPE = "plan-mode-state";
+const PLAN_EXIT_TOOL = "plan_exit";
+
+const READ_ONLY_TOOLS = [
+	"read",
+	"grep",
+	"find",
+	"ls",
+	"bash",
+	"question",
+	"questionnaire",
+	"get_current_session",
+	"get_memory",
+	"list_memories",
+	"count_lines",
+	PLAN_EXIT_TOOL,
+];
+
+export interface PlanModeOptions {
+	planTemplatePath: string;
+}
+
+export interface PlanModeState {
+	enabled: boolean;
+	savedActiveTools?: string[];
+	exitRequested?: boolean;
+}
+
+export interface PlanModeToolCall {
+	toolName: string;
+	input: unknown;
+}
+
+export interface PlanModeBeforeAgentStart {
+	prompt: string;
+	systemPrompt: string;
+}
+
+export interface ToolBlockResult {
+	block: true;
+	reason: string;
+}
+
+export interface PlanModeSession {
+	planExitTool(): Parameters<ExtensionAPI["registerTool"]>[0];
+	handleCommand(args: string, ctx: ExtensionContext): void;
+	restore(ctx: ExtensionContext, startEnabled: boolean): void;
+	beforeAgentStart(event: PlanModeBeforeAgentStart): Promise<{ systemPrompt: string } | undefined>;
+	blockToolCall(event: PlanModeToolCall): ToolBlockResult | undefined;
+	handleAgentEnd(ctx: ExtensionContext): Promise<void>;
+}
+
+interface CustomEntryLike {
+	type: string;
+	customType?: string;
+	data?: unknown;
+}
+
+export function openPlanModeSession(pi: ExtensionAPI, options: PlanModeOptions): PlanModeSession {
+	let enabled = false;
+	let savedActiveTools: string[] | undefined;
+	let exitRequested = false;
+
+	function saveState(): void {
+		pi.appendEntry(STATE_ENTRY_TYPE, { enabled, savedActiveTools, exitRequested });
+	}
+
+	function availableTools(names: readonly string[]): string[] {
+		const available = new Set(pi.getAllTools().map((tool) => tool.name));
+		return names.filter((name) => available.has(name));
+	}
+
+	function refreshUi(ctx: ExtensionContext): void {
+		if (!ctx.hasUI) return;
+
+		if (!enabled) {
+			ctx.ui.setStatus("plan-mode", undefined);
+			ctx.ui.setWidget("plan-mode", undefined);
+			return;
+		}
+
+		ctx.ui.setStatus("plan-mode", ctx.ui.theme.fg("warning", "⏸ PLAN"));
+		ctx.ui.setWidget(
+			"plan-mode",
+			[
+				ctx.ui.theme.fg("warning", "plan mode: read-only"),
+				ctx.ui.theme.fg("dim", "/plan-mode off to leave"),
+				ctx.ui.theme.fg("dim", "Write/edit and unsafe bash are blocked; finish with plan_exit."),
+			],
+			{ placement: "belowEditor" },
+		);
+	}
+
+	function enter(ctx: ExtensionContext, notify = true): void {
+		if (!enabled) {
+			savedActiveTools = pi.getActiveTools().filter((name) => name !== PLAN_EXIT_TOOL);
+		}
+		enabled = true;
+		exitRequested = false;
+		pi.setActiveTools(availableTools(READ_ONLY_TOOLS));
+		saveState();
+		refreshUi(ctx);
+		if (notify && ctx.hasUI) {
+			ctx.ui.notify("Plan mode enabled. Write tools are blocked.", "info");
+		}
+	}
+
+	function leave(ctx: ExtensionContext, notify = true): void {
+		const wasEnabled = enabled;
+		enabled = false;
+		exitRequested = false;
+
+		if (wasEnabled) {
+			const fallbackTools = availableTools(pi.getAllTools().map((tool) => tool.name));
+			pi.setActiveTools(
+				availableTools(savedActiveTools ?? fallbackTools).filter((name) => name !== PLAN_EXIT_TOOL),
+			);
+		}
+
+		savedActiveTools = undefined;
+		saveState();
+		refreshUi(ctx);
+
+		if (notify && ctx.hasUI) {
+			ctx.ui.notify(
+				wasEnabled
+					? "Plan mode disabled. Previous tools restored."
+					: "Plan mode is already inactive.",
+				"info",
+			);
+		}
+	}
+
+	function restore(ctx: ExtensionContext, startEnabled: boolean): void {
+		const entries = ctx.sessionManager.getBranch() as CustomEntryLike[];
+		const restored = entries
+			.filter((entry) => entry.type === "custom" && entry.customType === STATE_ENTRY_TYPE)
+			.pop()?.data as PlanModeState | undefined;
+
+		if (restored) {
+			enabled = restored.enabled;
+			savedActiveTools = restored.savedActiveTools;
+			exitRequested = restored.exitRequested ?? false;
+		}
+
+		if (startEnabled) {
+			if (!enabled) {
+				savedActiveTools = pi.getActiveTools().filter((name) => name !== PLAN_EXIT_TOOL);
+			}
+			enabled = true;
+		}
+
+		if (enabled) {
+			pi.setActiveTools(availableTools(READ_ONLY_TOOLS));
+		}
+		refreshUi(ctx);
+	}
+
+	function handleCommand(args: string, ctx: ExtensionContext): void {
+		switch (args.trim() || "toggle") {
+			case "on":
+				enter(ctx);
+				return;
+			case "off":
+				leave(ctx);
+				return;
+			case "toggle":
+				if (enabled) leave(ctx);
+				else enter(ctx);
+				return;
+			case "status":
+				ctx.ui.notify(
+					enabled
+						? `Plan mode is active. Tools: ${availableTools(READ_ONLY_TOOLS).join(", ")}`
+						: "Plan mode is inactive.",
+					"info",
+				);
+				return;
+			default:
+				ctx.ui.notify("Usage: /plan-mode [on|off|toggle|status]", "info");
+		}
+	}
+
+	async function beforeAgentStart(
+		event: PlanModeBeforeAgentStart,
+	): Promise<{ systemPrompt: string } | undefined> {
+		if (!enabled) return undefined;
+
+		const template = await readFile(options.planTemplatePath, "utf8");
+		const renderedPrompt = renderPlanPrompt(template, {
+			task: event.prompt,
+			planInfo: buildPlanInfo(),
+		});
+
+		return {
+			systemPrompt: `${event.systemPrompt}\n\n${renderedPrompt}\n\nNative enforcement: all filesystem writes, code edits, config changes, commits, installs, and other non-read-only actions are blocked until the user approves leaving plan mode.`,
+		};
+	}
+
+	function blockToolCall(event: PlanModeToolCall): ToolBlockResult | undefined {
+		if (!enabled) return undefined;
+
+		if (!READ_ONLY_TOOLS.includes(event.toolName)) {
+			return {
+				block: true,
+				reason: `Plan mode blocks the ${event.toolName} tool. Only read-only tools are available.`,
+			};
+		}
+
+		if (event.toolName !== "bash") return undefined;
+
+		const input = event.input as Record<string, unknown>;
+		const command = input.command;
+		if (typeof command !== "string" || !isReadOnlyBashCommand(command)) {
+			return {
+				block: true,
+				reason: `Plan mode blocks unsafe bash commands. Command: ${String(command)}`,
+			};
+		}
+
+		return undefined;
+	}
+
+	async function handleAgentEnd(ctx: ExtensionContext): Promise<void> {
+		if (!enabled || !exitRequested) return;
+
+		if (!ctx.hasUI) {
+			exitRequested = false;
+			saveState();
+			pi.sendMessage(
+				{
+					customType: "plan-mode-exit-requested",
+					content:
+						"plan_exit was called, but no interactive UI is available. Use /plan-mode off to leave plan mode.",
+					display: true,
+				},
+				{ triggerTurn: false },
+			);
+			return;
+		}
+
+		const approved = await ctx.ui.confirm(
+			"Leave plan mode?",
+			"The agent called plan_exit. Restore the previous write-capable tools?",
+		);
+
+		if (approved) {
+			leave(ctx);
+			return;
+		}
+
+		exitRequested = false;
+		saveState();
+		refreshUi(ctx);
+		ctx.ui.notify("Staying in plan mode. Write tools remain blocked.", "info");
+	}
+
+	function planExitTool(): Parameters<ExtensionAPI["registerTool"]>[0] {
+		return {
+			name: PLAN_EXIT_TOOL,
+			label: "Plan Exit",
+			description:
+				"Request approval to leave native plan mode after producing a final implementation plan. Does not change files.",
+			parameters: Type.Object({}),
+			async execute(_toolCallId, _params, _signal, _onUpdate, _ctx) {
+				if (!enabled) {
+					return {
+						content: [{ type: "text", text: "Plan mode is not active." }],
+						details: { enabled, savedActiveTools, exitRequested },
+					};
+				}
+
+				exitRequested = true;
+				saveState();
+				return {
+					content: [
+						{
+							type: "text",
+							text: "Plan exit requested. The user will be asked to approve restoring write tools.",
+						},
+					],
+					details: { enabled, savedActiveTools, exitRequested },
+				};
+			},
+		};
+	}
+
+	return {
+		planExitTool,
+		handleCommand,
+		restore,
+		beforeAgentStart,
+		blockToolCall,
+		handleAgentEnd,
+	};
+}
