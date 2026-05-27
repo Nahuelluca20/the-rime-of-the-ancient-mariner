@@ -60,3 +60,30 @@ Canonical examples: `extensions/memory-extension.ts` (tool registration), `exten
 - **ESM only** (`"type": "module"`). Source is TypeScript, compiled output is `.js`.
 - **Biome** enforces tabs, double quotes, semicolons, trailing commas, 100-char lines. Pre-commit hook (Husky + lint-staged) runs `biome check --write` on staged `*.{js,ts,json,md}`.
 - **Do not commit** `dist/` or `node_modules/` (both gitignored).
+
+## Local Testing
+
+The `.pi/extensions/` directory is gitignored — each developer creates it locally.
+
+Create `.pi/extensions/index.ts`:
+
+```ts
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import lifeCycleExtension from "../extensions/lifecycle.ts";
+import memoryExtension from "../extensions/memory-extension.ts";
+import sessionExtension from "../extensions/session-extension.ts";
+import planModeExtension from "../extensions/plan-mode.ts";
+
+export default function (pi: ExtensionAPI) {
+	sessionExtension(pi);
+	memoryExtension(pi);
+	lifeCycleExtension(pi);
+	planModeExtension(pi);
+}
+```
+
+Then run pi loading just that entrypoint:
+
+```bash
+pi --extension .pi/extensions/index.ts
+```

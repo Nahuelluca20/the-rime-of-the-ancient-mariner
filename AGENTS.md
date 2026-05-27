@@ -50,7 +50,8 @@ the-ancient-mariner/
 ├── prompts/                   # pi prompt templates
 ├── themes/                    # pi themes
 ├── docs/
-│   └── mvp.md                 # MVP requirements
+│   ├── mvp.md                 # MVP requirements
+│   └── development.md         # Local testing setup
 ├── dist/                      # Compiled output (gitignored, vestigial — no consumer)
 ├── drizzle.config.ts          # Drizzle CLI config (schema path lives here)
 ├── package.json               # pi package manifest
@@ -175,6 +176,33 @@ There is **no test framework** configured. Verify changes by:
 2. **Lint**: `bun run lint` (must pass with zero errors)
 3. **DB sanity**: `bun run db:generate` — no spurious migration if schema unchanged
 4. **Extensions**: load the package in pi and exercise the tool/command interactively
+
+### Local Testing Setup
+
+The `.pi/extensions/` directory is **gitignored** — each developer creates it locally. It aggregates all extensions into a single entrypoint for pi to load during development.
+
+Create `.pi/extensions/index.ts`:
+
+```typescript
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import lifeCycleExtension from "../extensions/lifecycle.ts";
+import memoryExtension from "../extensions/memory-extension.ts";
+import sessionExtension from "../extensions/session-extension.ts";
+import planModeExtension from "../extensions/plan-mode.ts";
+
+export default function (pi: ExtensionAPI) {
+	sessionExtension(pi);
+	memoryExtension(pi);
+	lifeCycleExtension(pi);
+	planModeExtension(pi);
+}
+```
+
+Then run pi loading just that entrypoint:
+
+```bash
+pi --extension .pi/extensions/index.ts
+```
 
 ---
 
