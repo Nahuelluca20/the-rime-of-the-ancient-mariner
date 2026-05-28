@@ -95,6 +95,21 @@ const SAFE_PATTERNS = [
 	/^\s*eza\b/i,
 ];
 
+/**
+ * Best-effort check for whether a shell command is safe to run in read-only plan mode.
+ *
+ * Contract:
+ * - Returns `true` only when the command matches a {@link SAFE_PATTERNS} entry AND hits no
+ *   {@link DESTRUCTIVE_PATTERNS} entry. It therefore **fails closed**: any command not on the
+ *   allow-list (or an empty command) is rejected.
+ * - Patterns match substrings anywhere on the line, so a safe command that merely mentions a
+ *   destructive word in an argument (e.g. `grep "git commit" file`) is conservatively rejected.
+ * - It does NOT parse shell control flow — `;`, `&&`, `||`, `$(...)`, and backticks are not
+ *   split or evaluated; the whole line is tested as text.
+ *
+ * This is a heuristic guard for plan mode, NOT a security sandbox. Do not rely on it as a
+ * boundary against an adversary.
+ */
 export function isReadOnlyBashCommand(command: string): boolean {
 	const trimmed = command.trim();
 	if (trimmed.length === 0) return false;

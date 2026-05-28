@@ -76,6 +76,10 @@ export function openPlanModeSession(pi: ExtensionAPI, options: PlanModeOptions):
 		return names.filter((name) => available.has(name));
 	}
 
+	function captureSavedTools(): void {
+		savedActiveTools = pi.getActiveTools().filter((name) => name !== PLAN_EXIT_TOOL);
+	}
+
 	function refreshUi(ctx: ExtensionContext): void {
 		if (!ctx.hasUI) return;
 
@@ -99,7 +103,7 @@ export function openPlanModeSession(pi: ExtensionAPI, options: PlanModeOptions):
 
 	function enter(ctx: ExtensionContext, notify = true): void {
 		if (!enabled) {
-			savedActiveTools = pi.getActiveTools().filter((name) => name !== PLAN_EXIT_TOOL);
+			captureSavedTools();
 		}
 		enabled = true;
 		exitRequested = false;
@@ -117,10 +121,8 @@ export function openPlanModeSession(pi: ExtensionAPI, options: PlanModeOptions):
 		exitRequested = false;
 
 		if (wasEnabled) {
-			const fallbackTools = availableTools(pi.getAllTools().map((tool) => tool.name));
-			pi.setActiveTools(
-				availableTools(savedActiveTools ?? fallbackTools).filter((name) => name !== PLAN_EXIT_TOOL),
-			);
+			const restoreList = savedActiveTools ?? pi.getAllTools().map((tool) => tool.name);
+			pi.setActiveTools(availableTools(restoreList).filter((name) => name !== PLAN_EXIT_TOOL));
 		}
 
 		savedActiveTools = undefined;
@@ -151,7 +153,7 @@ export function openPlanModeSession(pi: ExtensionAPI, options: PlanModeOptions):
 
 		if (startEnabled) {
 			if (!enabled) {
-				savedActiveTools = pi.getActiveTools().filter((name) => name !== PLAN_EXIT_TOOL);
+				captureSavedTools();
 			}
 			enabled = true;
 		}
@@ -195,11 +197,11 @@ export function openPlanModeSession(pi: ExtensionAPI, options: PlanModeOptions):
 		const template = await readFile(options.planTemplatePath, "utf8");
 		const renderedPrompt = renderPlanPrompt(template, {
 			task: event.prompt,
-			planInfo: buildPlanInfo(),
+			planInfo: buildPlanInfo(availableTools(READ_ONLY_TOOLS)),
 		});
 
 		return {
-			systemPrompt: `${event.systemPrompt}\n\n${renderedPrompt}\n\nNative enforcement: all filesystem writes, code edits, config changes, commits, installs, and other non-read-only actions are blocked until the user approves leaving plan mode.`,
+			systemPrompt: `${event.systemPrompt}\n\n${renderedPrompt}`,
 		};
 	}
 
@@ -272,7 +274,7 @@ export function openPlanModeSession(pi: ExtensionAPI, options: PlanModeOptions):
 				if (!enabled) {
 					return {
 						content: [{ type: "text", text: "Plan mode is not active." }],
-						details: { enabled, savedActiveTools, exitRequested },
+						details: { status: "inactive" },
 					};
 				}
 
@@ -285,7 +287,7 @@ export function openPlanModeSession(pi: ExtensionAPI, options: PlanModeOptions):
 							text: "Plan exit requested. The user will be asked to approve restoring write tools.",
 						},
 					],
-					details: { enabled, savedActiveTools, exitRequested },
+					details: { status: "exit-requested" },
 				};
 			},
 		};
