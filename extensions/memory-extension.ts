@@ -5,6 +5,8 @@ import { saveSession, updateSession } from "../src/memory/session-commands.ts";
 import { saveSessionSummary } from "../src/memory/session-summary.ts";
 import { openMemoryStore } from "../src/memory/store.ts";
 
+const store = openMemoryStore();
+
 export default function (pi: ExtensionAPI) {
 	pi.registerTool({
 		name: "count_lines",
@@ -33,7 +35,6 @@ export default function (pi: ExtensionAPI) {
 			name: Type.String({ description: "Memory name" }),
 		}),
 		async execute(_toolCallId, params, _signal, _onUpdate, _ctx) {
-			const store = openMemoryStore();
 			const memory = store.getMemory(params.project, params.name);
 			if (!memory) {
 				return {
@@ -61,7 +62,6 @@ export default function (pi: ExtensionAPI) {
 			project: Type.String({ description: "Project name" }),
 		}),
 		async execute(_toolCallId, params, _signal, _onUpdate, _ctx) {
-			const store = openMemoryStore();
 			const memories = store.listMemories(params.project);
 			const names = memories.map(
 				(m) => `- ${m.name} (updated: ${m.updatedAt?.toISOString() ?? "unknown"})`,
@@ -92,7 +92,7 @@ export default function (pi: ExtensionAPI) {
 			context: Type.String(),
 		}),
 		async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
-			const { message, severity } = saveSessionSummary(ctx, params);
+			const { message, severity } = saveSessionSummary(ctx, store, params);
 			return {
 				content: [{ type: "text", text: message }],
 				details: { severity, ...params },
@@ -103,7 +103,7 @@ export default function (pi: ExtensionAPI) {
 	pi.registerCommand("update-info", {
 		description: "Update the current session's stored memory in place",
 		handler: async (_args, ctx) => {
-			const { message, severity } = updateSession(ctx);
+			const { message, severity } = updateSession(ctx, store);
 			ctx.ui.notify(message, severity);
 		},
 	});
@@ -117,12 +117,23 @@ export default function (pi: ExtensionAPI) {
 			memory_name: Type.String({ description: "Memory name" }),
 		}),
 		async execute(_toolCallId, parameters, _signal, _onUpdate, _ctx) {
-			const store = openMemoryStore();
 			const memory = store.getMemory(parameters.project, parameters.memory_name);
+			if (!memory) {
+				return {
+					content: [
+						{
+							type: "text",
+							text: `Memory "${parameters.memory_name}" not found in project "${parameters.project}".`,
+						},
+					],
+					details: null,
+				};
+			}
+
 			pi.sendMessage(
 				{
 					customType: "memory",
-					content: JSON.stringify(memory?.data, null, 2),
+					content: JSON.stringify(memory.data, null, 2),
 					display: true,
 				},
 				{

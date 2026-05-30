@@ -1,6 +1,6 @@
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { resolveSession } from "./session-commands.ts";
-import { openMemoryStore } from "./store.ts";
+import type { MemoryStore } from "./store.ts";
 
 export interface SessionSummary {
 	title: string;
@@ -15,12 +15,12 @@ export interface SaveSummaryResult {
 
 export function saveSessionSummary(
 	ctx: ExtensionContext,
+	store: MemoryStore,
 	summary: SessionSummary,
 ): SaveSummaryResult {
 	const resolved = resolveSession(ctx);
 	if ("severity" in resolved) return resolved;
 
-	const store = openMemoryStore();
 	const existing = store.getMemory(resolved.projectName, resolved.name);
 
 	if (existing) {

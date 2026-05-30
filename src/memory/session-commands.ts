@@ -1,7 +1,7 @@
 import { basename } from "node:path";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { getSessionInfo } from "../session/info.ts";
-import { type AgentMemoryData, openMemoryStore } from "./store.ts";
+import type { AgentMemoryData, MemoryStore } from "./store.ts";
 
 export interface SessionCommandResult {
 	message: string;
@@ -29,11 +29,10 @@ export function resolveSession(ctx: ExtensionContext): ResolvedSession | Session
 	};
 }
 
-export function saveSession(ctx: ExtensionContext): SessionCommandResult {
+export function saveSession(ctx: ExtensionContext, store: MemoryStore): SessionCommandResult {
 	const resolved = resolveSession(ctx);
 	if ("severity" in resolved) return resolved;
 
-	const store = openMemoryStore();
 	const { created } = store.createMemory(resolved.projectName, resolved.name, resolved.data);
 	if (!created) {
 		return {
@@ -47,11 +46,10 @@ export function saveSession(ctx: ExtensionContext): SessionCommandResult {
 	};
 }
 
-export function updateSession(ctx: ExtensionContext): SessionCommandResult {
+export function updateSession(ctx: ExtensionContext, store: MemoryStore): SessionCommandResult {
 	const resolved = resolveSession(ctx);
 	if ("severity" in resolved) return resolved;
 
-	const store = openMemoryStore();
 	const { updated } = store.updateMemory(resolved.projectName, resolved.name, resolved.data);
 	if (!updated) {
 		return {
