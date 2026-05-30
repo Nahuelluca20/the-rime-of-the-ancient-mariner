@@ -107,4 +107,32 @@ export default function (pi: ExtensionAPI) {
 			ctx.ui.notify(message, severity);
 		},
 	});
+
+	pi.registerTool({
+		name: "insert_memories",
+		label: "Insert Memories into the context of the session",
+		description: "Insert Memories into the context",
+		parameters: Type.Object({
+			project: Type.String({ description: "Project name" }),
+			memory_name: Type.String({ description: "Memory name" }),
+		}),
+		async execute(_toolCallId, parameters, _signal, _onUpdate, _ctx) {
+			const store = openMemoryStore();
+			const memory = store.getMemory(parameters.project, parameters.memory_name);
+			pi.sendMessage(
+				{
+					customType: "memory",
+					content: JSON.stringify(memory?.data, null, 2),
+					display: true,
+				},
+				{
+					deliverAs: "steer",
+				},
+			);
+			return {
+				content: [{ type: "text", text: "Done" }],
+				details: { memory: `${parameters.memory_name}` },
+			};
+		},
+	});
 }
