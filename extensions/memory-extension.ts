@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
-import { resolveMemoryForContext } from "../src/memory/context.ts";
+import { formatMemoriesForContext, resolveMemoryForContext } from "../src/memory/context.ts";
 import { saveSession, updateSession } from "../src/memory/session-commands.ts";
 import { saveSessionSummary } from "../src/memory/session-summary.ts";
 import { openMemoryStore } from "../src/memory/store.ts";
@@ -124,17 +124,12 @@ export default function (pi: ExtensionAPI) {
 		}),
 		async execute(_toolCallId, params, _signal, _onUpdate, _ctx) {
 			const memories = context.getMemories(params.memories);
+			const text = formatMemoriesForContext(memories);
 
-			for (const memory of memories) {
+			if (text) {
 				pi.sendMessage(
-					{
-						customType: `${memory.name}`,
-						content: JSON.stringify(memory.data, null, 2),
-						display: true,
-					},
-					{
-						deliverAs: "steer",
-					},
+					{ customType: "memories", content: text, display: true },
+					{ deliverAs: "steer" },
 				);
 			}
 

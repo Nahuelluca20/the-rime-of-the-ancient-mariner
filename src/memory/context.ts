@@ -24,3 +24,23 @@ export function resolveMemoryForContext({
 		getMemories,
 	};
 }
+
+const CONTEXT_FIELDS = ["cwd", "title", "context"] as const;
+
+function formatMemory(memory: AgentMemory): string {
+	const lines: string[] = [];
+	for (const field of CONTEXT_FIELDS) {
+		const value = memory.data[field];
+		if (typeof value === "string" && value.length > 0) {
+			lines.push(`${field}: ${value}`);
+		}
+	}
+	return lines.join("\n");
+}
+
+export function formatMemoriesForContext(memories: AgentMemory[]): string {
+	return memories
+		.map(formatMemory)
+		.filter((block) => block.length > 0)
+		.join("\n\n---\n\n");
+}
