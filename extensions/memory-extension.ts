@@ -114,14 +114,16 @@ export default function (pi: ExtensionAPI) {
 		name: "insert_memories",
 		label: "Insert Memories into the context of the session",
 		description: "Insert Memories into the context",
-		parameters: Type.Array(
-			Type.Object({
-				projectName: Type.String(),
-				memoryName: Type.String(),
-			}),
-		),
-		async execute(_toolCallId, parameters, _signal, _onUpdate, _ctx) {
-			const memories = context.getMemories(parameters);
+		parameters: Type.Object({
+			memories: Type.Array(
+				Type.Object({
+					projectName: Type.String(),
+					memoryName: Type.String(),
+				}),
+			),
+		}),
+		async execute(_toolCallId, params, _signal, _onUpdate, _ctx) {
+			const memories = context.getMemories(params.memories);
 
 			for (const memory of memories) {
 				pi.sendMessage(
@@ -138,7 +140,7 @@ export default function (pi: ExtensionAPI) {
 
 			return {
 				content: [{ type: "text", text: "Done" }],
-				details: { memoryLoads: parameters.length },
+				details: { memoryLoads: params.memories.length },
 			};
 		},
 	});
