@@ -33,17 +33,17 @@ export default function (pi: ExtensionAPI) {
 		label: "Get Memory",
 		description: "Retrieve a specific memory by name from the ancient-mariner store",
 		parameters: Type.Object({
-			project: Type.String({ description: "Project name" }),
-			name: Type.String({ description: "Memory name" }),
+			projectName: Type.String({ description: "Project name" }),
+			memoryName: Type.String({ description: "Memory name" }),
 		}),
 		async execute(_toolCallId, params, _signal, _onUpdate, _ctx) {
-			const memory = store.getMemory(params.project, params.name);
+			const memory = store.getMemory(params.projectName, params.memoryName);
 			if (!memory) {
 				return {
 					content: [
 						{
 							type: "text",
-							text: `Memory "${params.name}" not found in project "${params.project}".`,
+							text: `Memory "${params.memoryName}" not found in project "${params.projectName}".`,
 						},
 					],
 					details: null,
@@ -61,10 +61,10 @@ export default function (pi: ExtensionAPI) {
 		label: "List Memories",
 		description: "List all stored memories for a given project",
 		parameters: Type.Object({
-			project: Type.String({ description: "Project name" }),
+			projectName: Type.String({ description: "Project name" }),
 		}),
 		async execute(_toolCallId, params, _signal, _onUpdate, _ctx) {
-			const memories = store.listMemories(params.project);
+			const memories = store.listMemories(params.projectName);
 			const names = memories.map(
 				(m) => `- ${m.name} (updated: ${m.updatedAt?.toISOString() ?? "unknown"})`,
 			);
@@ -75,7 +75,7 @@ export default function (pi: ExtensionAPI) {
 						text:
 							names.length > 0
 								? names.join("\n")
-								: `No memories found for project "${params.project}".`,
+								: `No memories found for project "${params.projectName}".`,
 					},
 				],
 				details: memories,
@@ -117,8 +117,8 @@ export default function (pi: ExtensionAPI) {
 		parameters: Type.Object({
 			memories: Type.Array(
 				Type.Object({
-					projectName: Type.String(),
-					memoryName: Type.String(),
+					projectName: Type.String({ description: "Project name" }),
+					memoryName: Type.String({ description: "Memory name" }),
 				}),
 			),
 		}),
@@ -140,7 +140,7 @@ export default function (pi: ExtensionAPI) {
 
 			return {
 				content: [{ type: "text", text: "Done" }],
-				details: { memoryLoads: params.memories.length },
+				details: { memoryLoads: memories.length },
 			};
 		},
 	});

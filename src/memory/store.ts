@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 import { openDb } from "../db/connection.ts";
 import { agentMemories, projects } from "./schema.ts";
 import type { AgentMemory, AgentMemoryData, Project } from "./types.ts";
@@ -14,11 +14,17 @@ export type UpdateMemoryResult =
 	| { memory: AgentMemory; updated: true }
 	| { memory: null; updated: false };
 
+export interface MemoryRef {
+	projectName: string;
+	name: string;
+}
+
 export interface MemoryStore {
 	getOrCreateProject(name: string): Project;
 	createMemory(projectName: string, name: string, data: AgentMemoryData): CreateMemoryResult;
 	updateMemory(projectName: string, name: string, data: AgentMemoryData): UpdateMemoryResult;
 	getMemory(projectName: string, name: string): AgentMemory | null;
+	getMemories(refs: MemoryRef[]): AgentMemory[];
 	listMemories(projectName: string): AgentMemory[];
 }
 
@@ -80,6 +86,32 @@ export function openMemoryStore(path?: string): MemoryStore {
 					.where(and(eq(agentMemories.projectId, project.id), eq(agentMemories.name, name)))
 					.get() ?? null
 			);
+		},
+
+		getMemories(refs) {
+			const namesByProject = new Map<string, string[]>();
+			for (const { projectName, name } of refs) {
+				const names = namesByProject.get(projectName) ?? [];
+				names.push(name);
+				namesByProject.set(projectName, names);
+			}
+
+			const found = new Map<string, AgentMemory>();
+			for (const [projectName, names] of namesByProject) {
+				// read-only: does not create the project (unlike getOrCreateProject)
+				const project = db.select().from(projects).where(eq(projects.name, projectName)).get();
+				if (!project) continue;
+				const rows = db
+					.select()
+					.from(agentMemories)
+					.where(and(eq(agentMemories.projectId, project.id), inArray(agentMemories.name, names)))
+					.all();
+				for (const row of rows) found.set(`${projectName} ${row.name}`, row);
+			}
+
+			return refs
+				.map((r) => found.get(`${r.projectName} ${r.name}`))
+				.filter((m): m is AgentMemory => m !== undefined);
 		},
 
 		listMemories(projectName) {

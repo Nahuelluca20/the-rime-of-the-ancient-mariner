@@ -15,16 +15,9 @@ export function resolveMemoryForContext({
 	store: MemoryStore;
 }): MemoryContext {
 	function getMemories(memoryInfo: MemoryInfoForRetrieval[]): AgentMemory[] {
-		const memories: AgentMemory[] = [];
-
-		for (const info of memoryInfo) {
-			const memory = store.getMemory(info.projectName, info.memoryName);
-			if (memory) {
-				memories.push(memory);
-			}
-		}
-
-		return memories;
+		return store.getMemories(
+			memoryInfo.map(({ projectName, memoryName }) => ({ projectName, name: memoryName })),
+		);
 	}
 
 	return {
