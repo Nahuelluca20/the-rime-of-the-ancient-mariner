@@ -2,9 +2,11 @@ import { readFile } from "node:fs/promises";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { formatMemoriesForContext, resolveMemoryForContext } from "../src/memory/context.ts";
-import { saveSession, updateSession } from "../src/memory/session-commands.ts";
+import { updateSession } from "../src/memory/session-commands.ts";
 import { saveSessionSummary } from "../src/memory/session-summary.ts";
 import { openMemoryStore } from "../src/memory/store.ts";
+import { SimpleDialog } from "../src/ui/example.ts";
+import { MemoriesTableDialog } from "../src/ui/memories-table.ts";
 
 const store = openMemoryStore();
 const context = resolveMemoryForContext({ store: store });
@@ -137,6 +139,44 @@ export default function (pi: ExtensionAPI) {
 				content: [{ type: "text", text: "Done" }],
 				details: { memoryLoads: memories.length },
 			};
+		},
+	});
+
+	pi.registerCommand("recent-memories", {
+		description: "Show the last 10 stored memories in a table",
+		handler: async (_args, ctx) => {
+			const rows = store.listRecentMemories(10);
+			await ctx.ui.custom<void>(
+				(_tui, theme, _kb, done) =>
+					new MemoriesTableDialog({
+						title: "Recent Memories",
+						rows,
+						onClose: () => done(),
+						theme,
+					}),
+				{ overlay: true, overlayOptions: { margin: 10 } },
+			);
+		},
+	});
+
+	pi.registerCommand("pick", {
+		description: "Show text in an overlay dialog",
+		handler: async (args, ctx) => {
+			const text = args || "No text provided. Usage: /pick <message>";
+
+			await ctx.ui.custom<void>(
+				(_tui, theme, _kb, done) => {
+					const dialog = new SimpleDialog({
+						title: "ancient-mariner",
+						text,
+						minHeight: 6,
+						onClose: () => done(),
+						theme,
+					});
+					return dialog;
+				},
+				{ overlay: true, overlayOptions: { margin: 20 } },
+			);
 		},
 	});
 }
