@@ -67,7 +67,7 @@ Plan mode is a native read-only mode that blocks all filesystem writes, code edi
 - Package managers, editors, system control commands
 
 **Allowed operations in plan mode:**
-- `read`, `grep`, `find`, `ls`, `bash` (read-only subset), `question`, `plan_exit`
+- `read`, `grep`, `find`, `ls`, `bash` (read-only subset), `question` / `questionnaire` when available, `plan_exit`
 - Safe bash: `cat`, `head`, `tail`, `grep`, `find`, `ls`, `git status/log/diff`, `curl`, `jq`, `rg`, `fd`, etc.
 
 ### Skills
