@@ -1,7 +1,11 @@
 import { readFile } from "node:fs/promises";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
-import { formatMemoriesForContext, resolveMemoryForContext } from "../src/memory/context.ts";
+import {
+	type MemoryInfoForRetrieval,
+	formatMemoriesForContext,
+	resolveMemoryForContext,
+} from "../src/memory/context.ts";
 import { updateSession } from "../src/memory/session-commands.ts";
 import { saveSessionSummary } from "../src/memory/session-summary.ts";
 import { openMemoryStore } from "../src/memory/store.ts";
@@ -12,6 +16,23 @@ const store = openMemoryStore();
 const context = resolveMemoryForContext({ store: store });
 
 export default function (pi: ExtensionAPI) {
+	function sendMemoriesToModel(
+		memoryInfo: MemoryInfoForRetrieval[],
+		options: { triggerTurn?: boolean } = {},
+	): number {
+		const memories = context.getMemories(memoryInfo);
+		const text = formatMemoriesForContext(memories);
+
+		if (text) {
+			pi.sendMessage(
+				{ customType: "memories", content: text, display: true },
+				{ deliverAs: "steer", triggerTurn: options.triggerTurn },
+			);
+		}
+
+		return memories.length;
+	}
+
 	pi.registerTool({
 		name: "count_lines",
 		label: "Count Lines",
@@ -125,37 +146,56 @@ export default function (pi: ExtensionAPI) {
 			),
 		}),
 		async execute(_toolCallId, params, _signal, _onUpdate, _ctx) {
-			const memories = context.getMemories(params.memories);
-			const text = formatMemoriesForContext(memories);
-
-			if (text) {
-				pi.sendMessage(
-					{ customType: "memories", content: text, display: true },
-					{ deliverAs: "steer" },
-				);
-			}
+			const memoryLoads = sendMemoriesToModel(params.memories);
 
 			return {
 				content: [{ type: "text", text: "Done" }],
-				details: { memoryLoads: memories.length },
+				details: { memoryLoads },
 			};
 		},
 	});
 
 	pi.registerCommand("recent-memories", {
-		description: "Show the last 10 stored memories in a table",
+		description: "Pick recent memories and insert them into the LLM context",
 		handler: async (_args, ctx) => {
-			const rows = store.listRecentMemories(10);
-			await ctx.ui.custom<void>(
-				(_tui, theme, _kb, done) =>
-					new MemoriesTableDialog({
+			const pageSize = 5;
+			const loadPage = (pageIndex: number) =>
+				store.listRecentMemories(pageSize, pageIndex * pageSize);
+			const totalRows = store.countMemories();
+			const rows = loadPage(0);
+
+			const selected = await ctx.ui.custom<MemoryInfoForRetrieval[] | null>(
+				(tui, theme, _kb, done) => {
+					const dialog = new MemoriesTableDialog({
 						title: "Recent Memories",
 						rows,
-						onClose: () => done(),
+						totalRows,
+						pageSize,
+						loadPage,
+						onSubmit: done,
+						onCancel: () => done(null),
 						theme,
-					}),
-				{ overlay: true, overlayOptions: { margin: 10 } },
+					});
+					return {
+						render: (width: number) => dialog.render(width),
+						invalidate: () => dialog.invalidate(),
+						handleInput: (data: string) => {
+							dialog.handleInput(data);
+							tui.requestRender();
+						},
+					};
+				},
+				{ overlay: true, overlayOptions: { width: "90%", minWidth: 80, margin: 2 } },
 			);
+
+			if (!selected) return;
+			if (selected.length === 0) {
+				ctx.ui.notify("No memories selected.", "info");
+				return;
+			}
+
+			const memoryLoads = sendMemoriesToModel(selected, { triggerTurn: true });
+			ctx.ui.notify(`Inserted ${memoryLoads} memor${memoryLoads === 1 ? "y" : "ies"}.`, "info");
 		},
 	});
 
