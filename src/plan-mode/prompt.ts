@@ -18,8 +18,7 @@ export function renderPlanPrompt(template: string, input: PlanPromptInput): stri
 export function buildPlanInfo(readOnlyTools: string[]): string {
 	return [
 		"Native pi plan mode is active for this turn.",
-		"No plan file is writable while this mode is active: write the plan in the chat instead.",
-		"The plan-file exception in this template is disabled by native enforcement.",
+		"No plan file is writable while this mode is active: keep working notes and the final plan in chat.",
 		`Available read-only tools: ${readOnlyTools.join(", ")}. Every other tool is blocked.`,
 		"Native enforcement: all filesystem writes, code edits, config changes, commits, installs, and other non-read-only actions are blocked until the user approves leaving plan mode.",
 		"When the plan is complete, call the plan_exit tool to ask the user for approval to leave plan mode.",

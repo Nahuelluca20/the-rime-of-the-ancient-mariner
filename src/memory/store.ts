@@ -1,4 +1,4 @@
-import { and, eq, inArray } from "drizzle-orm";
+import { and, count, desc, eq, inArray } from "drizzle-orm";
 import { openDb } from "../db/connection.ts";
 import { agentMemories, projects } from "./schema.ts";
 import type { AgentMemory, AgentMemoryData, Project } from "./types.ts";
@@ -19,6 +19,13 @@ export interface MemoryRef {
 	name: string;
 }
 
+export interface RecentMemory {
+	projectName: string;
+	name: string;
+	description: string;
+	updatedAt: Date;
+}
+
 export interface MemoryStore {
 	getOrCreateProject(name: string): Project;
 	createMemory(projectName: string, name: string, data: AgentMemoryData): CreateMemoryResult;
@@ -26,9 +33,16 @@ export interface MemoryStore {
 	getMemory(projectName: string, name: string): AgentMemory | null;
 	getMemories(refs: MemoryRef[]): AgentMemory[];
 	listMemories(projectName: string): AgentMemory[];
+	listRecentMemories(limit?: number, offset?: number): RecentMemory[];
+	countMemories(): number;
 }
 
 let cached: MemoryStore | undefined;
+
+function getMemoryDescription(data: AgentMemoryData): string {
+	const description = data.description;
+	return typeof description === "string" ? description : "";
+}
 
 export function openMemoryStore(path?: string): MemoryStore {
 	if (cached) return cached;
@@ -117,6 +131,33 @@ export function openMemoryStore(path?: string): MemoryStore {
 		listMemories(projectName) {
 			const project = this.getOrCreateProject(projectName);
 			return db.select().from(agentMemories).where(eq(agentMemories.projectId, project.id)).all();
+		},
+
+		listRecentMemories(limit = 10, offset = 0) {
+			// read-only: joins memories to their project name, newest first
+			return db
+				.select({
+					projectName: projects.name,
+					name: agentMemories.name,
+					updatedAt: agentMemories.updatedAt,
+					data: agentMemories.data,
+				})
+				.from(agentMemories)
+				.innerJoin(projects, eq(agentMemories.projectId, projects.id))
+				.orderBy(desc(agentMemories.updatedAt))
+				.limit(limit)
+				.offset(offset)
+				.all()
+				.map((row) => ({
+					projectName: row.projectName,
+					name: row.name,
+					description: getMemoryDescription(row.data),
+					updatedAt: row.updatedAt,
+				}));
+		},
+
+		countMemories() {
+			return db.select({ value: count() }).from(agentMemories).get()?.value ?? 0;
 		},
 	};
 
