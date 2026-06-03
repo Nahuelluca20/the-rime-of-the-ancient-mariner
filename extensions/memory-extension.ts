@@ -7,7 +7,7 @@ import {
 	resolveMemoryForContext,
 } from "../src/memory/context.ts";
 import { updateSession } from "../src/memory/session-commands.ts";
-import { saveSessionSummary } from "../src/memory/session-summary.ts";
+import { SESSION_TYPES, saveSessionSummary } from "../src/memory/session-summary.ts";
 import { openMemoryStore } from "../src/memory/store.ts";
 import { SimpleDialog } from "../src/ui/example.ts";
 import { MemoriesTableDialog } from "../src/ui/memories-table.ts";
@@ -110,11 +110,15 @@ export default function (pi: ExtensionAPI) {
 		name: "save_session_summary",
 		label: "Save Session Summary",
 		description:
-			"Persist a {title, description, context} summary into the current session's memory row.",
+			"Persist a session summary, including optional session type and tags, into the current session's memory row.",
 		parameters: Type.Object({
 			title: Type.String(),
 			description: Type.String(),
 			context: Type.String(),
+			sessionType: Type.Optional(
+				Type.Union(SESSION_TYPES.map((sessionType) => Type.Literal(sessionType))),
+			),
+			tags: Type.Optional(Type.Array(Type.String())),
 		}),
 		async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
 			const { message, severity } = saveSessionSummary(ctx, store, params);

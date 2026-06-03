@@ -25,17 +25,24 @@ export function resolveMemoryForContext({
 	};
 }
 
-const CONTEXT_FIELDS = ["cwd", "title", "context"] as const;
+const CONTEXT_FIELDS = ["sessionType", "tags", "cwd", "title", "description", "context"] as const;
 
 function formatMemory(memory: AgentMemory): string {
 	const lines: string[] = [];
 	for (const field of CONTEXT_FIELDS) {
 		const value = memory.data[field];
-		if (typeof value === "string" && value.length > 0) {
-			lines.push(`${field}: ${value}`);
-		}
+		const text = formatContextField(value);
+		if (text) lines.push(`${field}: ${text}`);
 	}
 	return lines.join("\n");
+}
+
+function formatContextField(value: unknown): string {
+	if (typeof value === "string") return value;
+	if (Array.isArray(value) && value.every((item) => typeof item === "string")) {
+		return value.join(", ");
+	}
+	return "";
 }
 
 export function formatMemoriesForContext(memories: AgentMemory[]): string {

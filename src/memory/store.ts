@@ -24,6 +24,7 @@ export interface RecentMemory {
 	projectName: string;
 	name: string;
 	description: string;
+	sessionType: string;
 	preview: string;
 	updatedAt: Date;
 }
@@ -44,6 +45,11 @@ let cached: MemoryStore | undefined;
 function getMemoryDescription(data: AgentMemoryData): string {
 	const description = data.description;
 	return typeof description === "string" ? description : "";
+}
+
+function getMemorySessionType(data: AgentMemoryData): string {
+	const sessionType = data.sessionType;
+	return typeof sessionType === "string" ? sessionType : "";
 }
 
 export function openMemoryStore(path?: string): MemoryStore {
@@ -154,6 +160,7 @@ export function openMemoryStore(path?: string): MemoryStore {
 					projectName: row.projectName,
 					name: row.name,
 					description: getMemoryDescription(row.data),
+					sessionType: getMemorySessionType(row.data),
 					preview: formatMemoryPreview(row.data),
 					updatedAt: row.updatedAt,
 				}));
