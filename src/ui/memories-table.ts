@@ -1,5 +1,6 @@
 import {
 	Key,
+	type KeyId,
 	matchesKey,
 	truncateToWidth,
 	visibleWidth,
@@ -37,6 +38,21 @@ export interface MemoriesTableDialogOptions {
  * and receive the final selected memory refs.
  */
 const DEFAULT_PREVIEW_HEIGHT = 18;
+
+const MEMORY_TABLE_KEYS = {
+	previewToggle: [Key.tab, "a"],
+	up: [Key.up, "k"],
+	down: [Key.down, "j"],
+	left: [Key.left, "h"],
+	right: [Key.right, "l"],
+} as const satisfies Record<string, readonly KeyId[]>;
+
+const MEMORY_TABLE_KEY_HINTS = {
+	previewToggle: "tab/a",
+	vertical: "↑↓/jk",
+	horizontal: "←/→/hl",
+	previewBack: "tab/a/esc",
+} as const;
 
 export class MemoriesTableDialog {
 	private title?: string;
@@ -80,7 +96,7 @@ export class MemoriesTableDialog {
 			return;
 		}
 
-		if (matchesKey(data, Key.tab)) {
+		if (isPreviewToggleKey(data)) {
 			this.openPreview();
 			return;
 		}
@@ -95,13 +111,13 @@ export class MemoriesTableDialog {
 			return;
 		}
 
-		if (matchesKey(data, Key.up)) {
+		if (isUpKey(data)) {
 			this.focusedIndex = Math.max(0, this.focusedIndex - 1);
 			this.invalidate();
 			return;
 		}
 
-		if (matchesKey(data, Key.down)) {
+		if (isDownKey(data)) {
 			this.focusedIndex = Math.min(this.rows.length - 1, this.focusedIndex + 1);
 			this.invalidate();
 			return;
@@ -198,18 +214,18 @@ export class MemoriesTableDialog {
 	}
 
 	private handlePreviewInput(data: string): void {
-		if (matchesKey(data, Key.escape) || matchesKey(data, Key.tab)) {
+		if (matchesKey(data, Key.escape) || isPreviewToggleKey(data)) {
 			this.closePreview();
 			return;
 		}
 
-		if (matchesKey(data, Key.up)) {
+		if (isUpKey(data)) {
 			this.previewScrollOffset = Math.max(0, this.previewScrollOffset - 1);
 			this.invalidate();
 			return;
 		}
 
-		if (matchesKey(data, Key.down)) {
+		if (isDownKey(data)) {
 			this.previewScrollOffset += 1;
 			this.invalidate();
 			return;
@@ -281,9 +297,9 @@ export class MemoriesTableDialog {
 	}
 
 	private handlePageInput(data: string): void {
-		if (matchesKey(data, Key.left)) {
+		if (isLeftKey(data)) {
 			this.goToPage(Math.max(0, this.pageIndex - 1));
-		} else if (matchesKey(data, Key.right)) {
+		} else if (isRightKey(data)) {
 			this.goToPage(Math.min(this.pageCount() - 1, this.pageIndex + 1));
 		}
 	}
@@ -318,8 +334,10 @@ export class MemoriesTableDialog {
 	}
 
 	private footerHint(): string {
-		if (this.previewOpen) return "↑↓ scroll preview • space select • enter insert • tab/esc back";
-		return "↑↓ navigate • tab preview • space select • ←/→ pages • enter insert • esc cancel";
+		const hints = MEMORY_TABLE_KEY_HINTS;
+		if (this.previewOpen)
+			return `${hints.vertical} scroll preview • space select • enter insert • ${hints.previewBack} back`;
+		return `${hints.vertical} navigate • ${hints.previewToggle} preview • space select • ${hints.horizontal} pages • enter insert • esc cancel`;
 	}
 
 	private previewViewportHeight(): number {
@@ -333,6 +351,30 @@ export class MemoriesTableDialog {
 
 function memoryKey(memory: Pick<RecentMemory, "projectName" | "name">): string {
 	return `${memory.projectName}\0${memory.name}`;
+}
+
+function isPreviewToggleKey(data: string): boolean {
+	return matchesAnyKey(data, MEMORY_TABLE_KEYS.previewToggle);
+}
+
+function isUpKey(data: string): boolean {
+	return matchesAnyKey(data, MEMORY_TABLE_KEYS.up);
+}
+
+function isDownKey(data: string): boolean {
+	return matchesAnyKey(data, MEMORY_TABLE_KEYS.down);
+}
+
+function isLeftKey(data: string): boolean {
+	return matchesAnyKey(data, MEMORY_TABLE_KEYS.left);
+}
+
+function isRightKey(data: string): boolean {
+	return matchesAnyKey(data, MEMORY_TABLE_KEYS.right);
+}
+
+function matchesAnyKey(data: string, keys: readonly KeyId[]): boolean {
+	return keys.some((key) => matchesKey(data, key));
 }
 
 function padToWidth(text: string, width: number): string {
