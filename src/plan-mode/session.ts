@@ -89,7 +89,7 @@ export function openPlanModeSession(pi: ExtensionAPI, options: PlanModeOptions):
 			return;
 		}
 
-		ctx.ui.setStatus("plan-mode", ctx.ui.theme.fg("warning", "⏸ PLAN"));
+		ctx.ui.setStatus("plan-mode", ctx.ui.theme.fg("warning", "Making a good plan"));
 		ctx.ui.setWidget(
 			"plan-mode",
 			[
