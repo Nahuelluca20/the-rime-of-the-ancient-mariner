@@ -4,6 +4,8 @@ argument-hint: "[focus or question]"
 ---
 Explore and understand this codebase before proposing or making changes.
 
+This is a `code-exploration` session: optimize for reusable findings and orientation, not implementation.
+
 Optional focus / question from the user:
 
 ```text
@@ -46,5 +48,6 @@ Return a concise codebase brief with these sections:
 6. **Conventions** — style, patterns, and project-specific rules to follow.
 7. **Focus findings** — answer the optional focus/question if one was provided.
 8. **Open questions / risks** — only the meaningful unknowns.
+9. **Memory handoff** — 3–6 bullets that would be useful if this session is later saved with `/save-summary` as `code-exploration`.
 
 Do not implement anything. The goal is understanding and orientation only.
