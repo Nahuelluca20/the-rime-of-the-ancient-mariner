@@ -14,11 +14,11 @@
 |---------|-------------|
 | **Agent Memory Store** | Persist project-scoped key-value memories with JSON data via SQLite + Drizzle ORM |
 | **Session Tracking** | Save and update session metadata with `update-info` command |
-| **Session Summaries** | Distill a session into `{title, description, context}` and merge into persistent memory |
-| **Recent Memory Picker** | Browse the newest memories in an interactive paged dialog, preview memory contents with `Tab`, and insert selected memories into the LLM context |
+| **Typed Session Summaries** | Distill a session into `{title, description, context, sessionType, tags}` and merge into persistent memory |
+| **Recent Memory Picker** | Browse newest memories with visible session-type badges, preview contents with `Tab`, and insert selected memories into the LLM context |
 | **Plan Mode** | Native read-only planning mode that blocks write tools and unsafe bash commands until user approval |
 | **Session Info** | Inspect session metadata (ID, file, name, CWD, entry count, leaf) |
-| **Prompts & Skills** | `plan.md`, `explore-codebase.md`, `save-summary.md` prompts; `save-summary` skill |
+| **Prompts & Skills** | Planning, exploration, understanding, and typed summary prompts; `save-summary` skill |
 
 ## Installation
 
@@ -45,10 +45,12 @@ Once installed, pi loads all extensions, skills, and prompts automatically. The 
 |------|-------------|----------------|
 | `get_memory` | Retrieve a specific memory by name | `project: string`, `name: string` |
 | `list_memories` | List all stored memories for a project | `project: string` |
-| `save_session_summary` | Persist a `{title, description, context}` summary into the session's memory row | `title: string`, `description: string`, `context: string` |
+| `save_session_summary` | Persist a typed session summary into the session's memory row | `title: string`, `description: string`, `context: string`, optional `sessionType`, `tags` |
 | `insert_memories` | Insert selected memories into the current LLM context | `memories: { projectName, memoryName }[]` |
 | `get_current_session` | Return current pi session metadata | _(none)_ |
 | `count_lines` | Count lines in a file | `path: string` |
+
+Supported `sessionType` values are `implementation`, `code-exploration`, `implementation-exploration`, `code-understanding`, and `mixed`.
 
 ### Commands
 
@@ -62,7 +64,7 @@ Once installed, pi loads all extensions, skills, and prompts automatically. The 
 
 ### Recent Memories
 
-Use `/recent-memories` to open an overlay dialog showing the newest stored memories, five per page. The dialog displays each memory's project, name, description, and last update date. Press `Tab` on a focused memory to open a larger preview of its stored data; long previews remain scrollable with the arrow keys.
+Use `/recent-memories` to open an overlay dialog showing the newest stored memories, five per page. The dialog displays each memory's project, name, session-type badge, description, and last update date. Press `Tab` on a focused memory to open a larger preview of its stored data; long previews remain scrollable with the arrow keys.
 
 Keyboard shortcuts in the table:
 
@@ -84,7 +86,7 @@ Keyboard shortcuts in preview mode:
 | `Enter` | Insert selected memories into the LLM context |
 | `Tab` / `Esc` | Return to the table |
 
-Submitted memories are formatted with the same context renderer used by the `insert_memories` tool and sent as a `memories` custom message. Preview text is formatted separately for human-readable browsing and does not change what gets inserted into the LLM context.
+Submitted memories are formatted with the same context renderer used by the `insert_memories` tool and sent as a `memories` custom message. Inserted context includes `sessionType`, `tags`, `cwd`, `title`, `description`, and `context` when present. Preview text is formatted separately for human-readable browsing and does not change what gets inserted into the LLM context.
 
 ### Plan Mode
 
@@ -103,15 +105,17 @@ Plan mode is a native read-only mode that blocks all filesystem writes, code edi
 
 | Skill | Description |
 |-------|-------------|
-| `save-summary` | Triggered via `/save-summary` — distills the current session into title/description/context and persists via `save_session_summary` |
+| `save-summary` | Triggered via `/save-summary` — classifies the session type, distills title/description/context/tags, and persists via `save_session_summary` |
 
 ### Prompts
 
 | Prompt | Description |
 |--------|-------------|
 | `plan.md` | Structured plan-mode workflow template (Phase 1-5: Understand → Design → Review → Final Plan → Exit) |
-| `explore-codebase.md` | Read-only codebase exploration workflow for understanding before making changes |
-| `save-summary.md` | Guides the agent to call `save_session_summary` to wrap up a session |
+| `explore-codebase.md` | Read-only `code-exploration` workflow for codebase orientation |
+| `explore-implementation.md` | Read-only `implementation-exploration` workflow for comparing approaches before coding |
+| `understand-code.md` | Read-only `code-understanding` workflow for explaining existing modules, flows, APIs, or behavior |
+| `save-summary.md` | Guides the agent to classify and persist a typed session summary |
 
 ## Architecture
 
@@ -147,6 +151,8 @@ the-rime-of-the-ancient-mariner/
 ├── prompts/                # pi prompt templates (Markdown)
 │   ├── plan.md
 │   ├── explore-codebase.md
+│   ├── explore-implementation.md
+│   ├── understand-code.md
 │   └── save-summary.md
 ├── migrations/             # Drizzle-generated SQL migrations
 └── dist/                   # Compiled output (gitignored, vestigial)
@@ -175,7 +181,7 @@ store.createMemory("my-project", "session-001", { summary: "..." });
 store.updateMemory("my-project", "session-001", { summary: "updated" });
 store.getMemory("my-project", "session-001");
 store.listMemories("my-project");
-store.listRecentMemories(5, 0); // newest first, paged, includes description + preview text
+store.listRecentMemories(5, 0); // newest first, paged, includes session type + preview text
 store.countMemories();
 ```
 
