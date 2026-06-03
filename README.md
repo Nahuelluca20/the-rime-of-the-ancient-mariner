@@ -15,7 +15,7 @@
 | **Agent Memory Store** | Persist project-scoped key-value memories with JSON data via SQLite + Drizzle ORM |
 | **Session Tracking** | Save and update session metadata with `update-info` command |
 | **Session Summaries** | Distill a session into `{title, description, context}` and merge into persistent memory |
-| **Recent Memory Picker** | Browse the newest memories in an interactive paged dialog and insert selected memories into the LLM context |
+| **Recent Memory Picker** | Browse the newest memories in an interactive paged dialog, preview memory contents with `Tab`, and insert selected memories into the LLM context |
 | **Plan Mode** | Native read-only planning mode that blocks write tools and unsafe bash commands until user approval |
 | **Session Info** | Inspect session metadata (ID, file, name, CWD, entry count, leaf) |
 | **Prompts & Skills** | `plan.md`, `explore-codebase.md`, `save-summary.md` prompts; `save-summary` skill |
@@ -62,19 +62,29 @@ Once installed, pi loads all extensions, skills, and prompts automatically. The 
 
 ### Recent Memories
 
-Use `/recent-memories` to open an overlay dialog showing the newest stored memories, five per page. The dialog displays each memory's project, name, description, and last update date.
+Use `/recent-memories` to open an overlay dialog showing the newest stored memories, five per page. The dialog displays each memory's project, name, description, and last update date. Press `Tab` on a focused memory to open a larger preview of its stored data; long previews remain scrollable with the arrow keys.
 
-Keyboard shortcuts:
+Keyboard shortcuts in the table:
 
 | Key | Action |
 |-----|--------|
 | `↑` / `↓` | Move through memories on the current page |
+| `Tab` | Open preview for the focused memory |
 | `Space` | Select or unselect the focused memory |
 | `←` / `→` | Move between pages |
 | `Enter` | Insert selected memories into the LLM context |
 | `Esc` | Cancel |
 
-Submitted memories are formatted with the same context renderer used by the `insert_memories` tool and sent as a `memories` custom message.
+Keyboard shortcuts in preview mode:
+
+| Key | Action |
+|-----|--------|
+| `↑` / `↓` | Scroll the preview text |
+| `Space` | Select or unselect the previewed memory |
+| `Enter` | Insert selected memories into the LLM context |
+| `Tab` / `Esc` | Return to the table |
+
+Submitted memories are formatted with the same context renderer used by the `insert_memories` tool and sent as a `memories` custom message. Preview text is formatted separately for human-readable browsing and does not change what gets inserted into the LLM context.
 
 ### Plan Mode
 
@@ -110,10 +120,11 @@ The repo has two distinct execution surfaces:
 ```
 the-rime-of-the-ancient-mariner/
 ├── src/                    # Domain layer (compiled by tsc → dist/)
-│   ├── memory/             # Knowledge store: schema, types, store, session commands
+│   ├── memory/             # Knowledge store: schema, types, store, previews, session commands
 │   │   ├── schema.ts       # Drizzle schema (projects, agent_memories tables)
 │   │   ├── types.ts        # Public type re-exports
 │   │   ├── store.ts        # MemoryStore: openMemoryStore() — lazy init + cached
+│   │   ├── preview.ts      # Human-readable preview formatting for memory picker UI
 │   │   ├── session-commands.ts  # saveSession / updateSession logic
 │   │   └── session-summary.ts   # saveSessionSummary logic
 │   ├── session/
@@ -164,7 +175,7 @@ store.createMemory("my-project", "session-001", { summary: "..." });
 store.updateMemory("my-project", "session-001", { summary: "updated" });
 store.getMemory("my-project", "session-001");
 store.listMemories("my-project");
-store.listRecentMemories(5, 0); // newest first, paged
+store.listRecentMemories(5, 0); // newest first, paged, includes description + preview text
 store.countMemories();
 ```
 
