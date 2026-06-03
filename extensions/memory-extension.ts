@@ -185,7 +185,10 @@ export default function (pi: ExtensionAPI) {
 						},
 					};
 				},
-				{ overlay: true, overlayOptions: { width: "90%", minWidth: 80, margin: 2 } },
+				{
+					overlay: true,
+					overlayOptions: { width: "90%", minWidth: 80, maxHeight: "90%", margin: 2 },
+				},
 			);
 
 			if (!selected) return;

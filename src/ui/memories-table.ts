@@ -1,4 +1,10 @@
-import { Key, matchesKey, truncateToWidth } from "@earendil-works/pi-tui";
+import {
+	Key,
+	matchesKey,
+	truncateToWidth,
+	visibleWidth,
+	wrapTextWithAnsi,
+} from "@earendil-works/pi-tui";
 import type { RecentMemory } from "../memory/store.ts";
 
 interface SimpleTheme {
@@ -27,9 +33,11 @@ export interface MemoriesTableDialogOptions {
  * Overlay dialog for selecting recent memories.
  *
  * Shows memories newest-first, five per page by default. The dialog owns cursor,
- * page, and checked state so callers only provide page loading and receive the
- * final selected memory refs.
+ * page, checked state, and preview scrolling so callers only provide page loading
+ * and receive the final selected memory refs.
  */
+const DEFAULT_PREVIEW_HEIGHT = 18;
+
 export class MemoriesTableDialog {
 	private title?: string;
 	private rows: RecentMemory[];
@@ -43,6 +51,9 @@ export class MemoriesTableDialog {
 	private pageIndex = 0;
 	private focusedIndex = 0;
 	private selectedKeys = new Set<string>();
+
+	private previewOpen = false;
+	private previewScrollOffset = 0;
 
 	private cachedWidth?: number;
 	private cachedLines?: string[];
@@ -59,8 +70,18 @@ export class MemoriesTableDialog {
 	}
 
 	handleInput(data: string): void {
+		if (this.previewOpen) {
+			this.handlePreviewInput(data);
+			return;
+		}
+
 		if (matchesKey(data, Key.escape)) {
 			this.onCancel();
+			return;
+		}
+
+		if (matchesKey(data, Key.tab)) {
+			this.openPreview();
 			return;
 		}
 
@@ -87,7 +108,7 @@ export class MemoriesTableDialog {
 		}
 
 		if (matchesKey(data, Key.space) || data === " ") {
-			const current = this.rows[this.focusedIndex];
+			const current = this.currentRow();
 			if (current) this.toggleSelected(current);
 			return;
 		}
@@ -122,7 +143,7 @@ export class MemoriesTableDialog {
 
 		if (this.title) {
 			const label = truncateToWidth(` ${this.title} `, cw, "");
-			const dashes = "─".repeat(Math.max(0, cw - visibleLen(label)));
+			const dashes = "─".repeat(Math.max(0, cw - visibleWidth(label)));
 			lines.push(borderFg(`╭${label}${dashes}╮`));
 		} else {
 			lines.push(borderFg(`╭${"─".repeat(cw)}╮`));
@@ -137,6 +158,8 @@ export class MemoriesTableDialog {
 
 		if (this.totalRows === 0) {
 			lines.push(contentLine(warning("No memories found.")));
+		} else if (this.previewOpen) {
+			this.renderPreview(lines, contentLine, muted, warning, innerW);
 		} else {
 			for (let index = 0; index < this.rows.length; index++) {
 				const row = this.rows[index];
@@ -148,7 +171,7 @@ export class MemoriesTableDialog {
 				const updated = formatDate(row.updatedAt);
 				const prefix = `${cursor} ${checkbox} `;
 				const datePart = muted(updated);
-				const mainWidth = Math.max(8, innerW - visibleLen(prefix) - updated.length - 1);
+				const mainWidth = Math.max(8, innerW - visibleWidth(prefix) - updated.length - 1);
 				const name = `${row.projectName} / ${row.name}`;
 				const main = focused ? this.theme.fg("accent", this.theme.bold(name)) : name;
 				const titleLine = `${prefix}${padToWidth(main, mainWidth)} ${datePart}`;
@@ -161,9 +184,7 @@ export class MemoriesTableDialog {
 		}
 
 		lines.push(blankLine());
-		lines.push(
-			contentLine(muted("↑↓ navigate • space select • ←/→ pages • enter insert • esc cancel")),
-		);
+		lines.push(contentLine(muted(this.footerHint())));
 		lines.push(borderFg(`╰${"─".repeat(cw)}╯`));
 
 		this.cachedLines = lines;
@@ -174,6 +195,89 @@ export class MemoriesTableDialog {
 	invalidate(): void {
 		this.cachedWidth = undefined;
 		this.cachedLines = undefined;
+	}
+
+	private handlePreviewInput(data: string): void {
+		if (matchesKey(data, Key.escape) || matchesKey(data, Key.tab)) {
+			this.closePreview();
+			return;
+		}
+
+		if (matchesKey(data, Key.up)) {
+			this.previewScrollOffset = Math.max(0, this.previewScrollOffset - 1);
+			this.invalidate();
+			return;
+		}
+
+		if (matchesKey(data, Key.down)) {
+			this.previewScrollOffset += 1;
+			this.invalidate();
+			return;
+		}
+
+		if (matchesKey(data, Key.enter)) {
+			this.onSubmit(this.getSelectedRefs());
+			return;
+		}
+
+		if (matchesKey(data, Key.space) || data === " ") {
+			const current = this.currentRow();
+			if (current) this.toggleSelected(current);
+		}
+	}
+
+	private renderPreview(
+		lines: string[],
+		contentLine: (inner: string) => string,
+		muted: (text: string) => string,
+		warning: (text: string) => string,
+		innerW: number,
+	): void {
+		const row = this.currentRow();
+		if (!row) {
+			lines.push(contentLine(warning("No memory focused.")));
+			return;
+		}
+
+		const title = this.theme.fg(
+			"accent",
+			this.theme.bold(`Preview: ${row.projectName} / ${row.name}`),
+		);
+		lines.push(contentLine(title));
+
+		const wrapped = wrapPreviewText(row.preview || "(no preview available)", innerW);
+		const viewportHeight = this.previewViewportHeight();
+		const maxScrollOffset = Math.max(0, wrapped.length - viewportHeight);
+		const scrollOffset = Math.min(this.previewScrollOffset, maxScrollOffset);
+		this.previewScrollOffset = scrollOffset;
+
+		const endLine = Math.min(wrapped.length, scrollOffset + viewportHeight);
+		const scrollInfo =
+			wrapped.length > viewportHeight
+				? `lines ${scrollOffset + 1}-${endLine}/${wrapped.length}`
+				: `${wrapped.length} line${wrapped.length === 1 ? "" : "s"}`;
+		lines.push(contentLine(muted(scrollInfo)));
+
+		for (const line of wrapped.slice(scrollOffset, endLine)) {
+			lines.push(contentLine(line));
+		}
+
+		for (let lineCount = endLine - scrollOffset; lineCount < viewportHeight; lineCount++) {
+			lines.push(contentLine(""));
+		}
+	}
+
+	private openPreview(): void {
+		if (!this.currentRow()) return;
+		this.previewOpen = true;
+		this.previewScrollOffset = 0;
+		this.invalidate();
+	}
+
+	private closePreview(): void {
+		this.previewOpen = false;
+		this.previewScrollOffset = 0;
+		this.invalidate();
 	}
 
 	private handlePageInput(data: string): void {
@@ -189,7 +293,7 @@ export class MemoriesTableDialog {
 		this.pageIndex = nextPageIndex;
 		this.rows = this.loadPage(nextPageIndex);
 		this.focusedIndex = Math.min(this.focusedIndex, Math.max(0, this.rows.length - 1));
-		this.invalidate();
+		this.closePreview();
 	}
 
 	private toggleSelected(memory: RecentMemory): void {
@@ -209,26 +313,37 @@ export class MemoriesTableDialog {
 		});
 	}
 
+	private currentRow(): RecentMemory | undefined {
+		return this.rows[this.focusedIndex];
+	}
+
+	private footerHint(): string {
+		if (this.previewOpen) return "↑↓ scroll preview • space select • enter insert • tab/esc back";
+		return "↑↓ navigate • tab preview • space select • ←/→ pages • enter insert • esc cancel";
+	}
+
+	private previewViewportHeight(): number {
+		return DEFAULT_PREVIEW_HEIGHT;
+	}
+
 	private pageCount(): number {
 		return Math.max(1, Math.ceil(this.totalRows / this.pageSize));
 	}
 }
 
-// biome-ignore lint/suspicious/noControlCharactersInRegex: stripping ANSI SGR escapes to measure visible width
-const ANSI_SGR = /\x1b\[[0-9;]*m/g;
-
 function memoryKey(memory: Pick<RecentMemory, "projectName" | "name">): string {
 	return `${memory.projectName}\0${memory.name}`;
 }
 
-function visibleLen(str: string): number {
-	return str.replace(ANSI_SGR, "").length;
-}
-
 function padToWidth(text: string, width: number): string {
 	const truncated = truncateToWidth(text, width);
-	const padding = " ".repeat(Math.max(0, width - visibleLen(truncated)));
+	const padding = " ".repeat(Math.max(0, width - visibleWidth(truncated)));
 	return `${truncated}${padding}`;
+}
+
+function wrapPreviewText(text: string, width: number): string[] {
+	const wrapped = wrapTextWithAnsi(text, Math.max(1, width));
+	return wrapped.length > 0 ? wrapped : ["(no preview available)"];
 }
 
 function formatDate(date: Date | null | undefined): string {

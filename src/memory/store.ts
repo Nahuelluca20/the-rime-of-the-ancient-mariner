@@ -1,5 +1,6 @@
 import { and, count, desc, eq, inArray } from "drizzle-orm";
 import { openDb } from "../db/connection.ts";
+import { formatMemoryPreview } from "./preview.ts";
 import { agentMemories, projects } from "./schema.ts";
 import type { AgentMemory, AgentMemoryData, Project } from "./types.ts";
 
@@ -23,6 +24,7 @@ export interface RecentMemory {
 	projectName: string;
 	name: string;
 	description: string;
+	preview: string;
 	updatedAt: Date;
 }
 
@@ -152,6 +154,7 @@ export function openMemoryStore(path?: string): MemoryStore {
 					projectName: row.projectName,
 					name: row.name,
 					description: getMemoryDescription(row.data),
+					preview: formatMemoryPreview(row.data),
 					updatedAt: row.updatedAt,
 				}));
 		},
