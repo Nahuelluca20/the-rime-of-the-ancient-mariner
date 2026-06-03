@@ -2,10 +2,22 @@ import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { resolveSession } from "./session-commands.ts";
 import type { MemoryStore } from "./store.ts";
 
+export const SESSION_TYPES = [
+	"implementation",
+	"code-exploration",
+	"implementation-exploration",
+	"code-understanding",
+	"mixed",
+] as const;
+
+export type SessionType = (typeof SESSION_TYPES)[number];
+
 export interface SessionSummary {
 	title: string;
 	description: string;
 	context: string;
+	sessionType?: SessionType;
+	tags?: string[];
 }
 
 export interface SaveSummaryResult {

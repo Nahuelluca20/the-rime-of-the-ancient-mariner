@@ -141,6 +141,7 @@ export class MemoriesTableDialog {
 		const muted = (s: string) => this.theme.fg("dim", s);
 		const success = (s: string) => this.theme.fg("success", s);
 		const warning = (s: string) => this.theme.fg("warning", s);
+		const badge = (s: string) => this.theme.fg("accent", s);
 
 		const cw = Math.max(0, width - 2);
 		const padX = cw >= 2 ? 1 : 0;
@@ -192,10 +193,15 @@ export class MemoriesTableDialog {
 				const main = focused ? this.theme.fg("accent", this.theme.bold(name)) : name;
 				const titleLine = `${prefix}${padToWidth(main, mainWidth)} ${datePart}`;
 				const description = row.description || "(no description)";
-				const descriptionLine = muted(`    ${description}`);
+				const typeBadge = formatSessionTypeBadge(row.sessionType, badge);
+				const descriptionText = typeBadge
+					? `${typeBadge} ${muted(description)}`
+					: muted(description);
+				const descriptionLine = `    ${descriptionText}`;
 
 				lines.push(contentLine(titleLine, focused ? decorateFocused : undefined));
 				lines.push(contentLine(descriptionLine, focused ? decorateFocused : undefined));
+				if (index < this.rows.length - 1) lines.push(blankLine());
 			}
 		}
 
@@ -347,6 +353,14 @@ export class MemoriesTableDialog {
 	private pageCount(): number {
 		return Math.max(1, Math.ceil(this.totalRows / this.pageSize));
 	}
+}
+
+function formatSessionTypeBadge(
+	sessionType: string | null | undefined,
+	decorate: (text: string) => string,
+): string {
+	if (!sessionType) return "";
+	return decorate(`[${sessionType}]`);
 }
 
 function memoryKey(memory: Pick<RecentMemory, "projectName" | "name">): string {
