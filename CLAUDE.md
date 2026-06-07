@@ -18,7 +18,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 | `bun run lint:fix` | Biome check + auto-fix |
 | `bun run format` | Biome format |
 | `bun run db:generate` | Emit a new Drizzle migration into `migrations/` from `src/memory/schema.ts` |
-| `bun run db:studio` | Open Drizzle Studio against the local SQLite DB |
+| `bun run db:studio` | Open Drizzle Studio against the global ancient-mariner DB |
 
 There is **no test framework configured**. Verify changes by building, linting, and exercising extensions inside pi.
 
@@ -53,7 +53,7 @@ Canonical examples: `extensions/memory-extension.ts` (tool registration), `exten
 - `src/memory/store.ts` — `openMemoryStore(path?)` returns a `MemoryStore` with domain ops (`getOrCreateProject`, `putMemory`). The store is lazy-initialized and cached at module level — first call opens sqlite and runs migrations; subsequent calls return the cached instance. Extensions never touch Drizzle directly.
 - `src/db/connection.ts` — `openDb(path)` opens `better-sqlite3`, wraps in Drizzle, and **runs migrations automatically** before returning. Internal; only `memory/store.ts` imports it.
 - Schema change workflow: edit `src/memory/schema.ts` → `bun run db:generate` → commit the new migration alongside the schema change.
-- Default DB file: `rime-ancient-mariner.db` at the repo root.
+- Default DB file: `~/.pi/agent/the-ancient-mariner/rime-ancient-mariner.db`. Override with `THE_ANCIENT_MARINER_DB_PATH` if needed.
 
 ## Conventions & gotchas
 
