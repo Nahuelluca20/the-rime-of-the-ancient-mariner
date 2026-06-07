@@ -162,7 +162,7 @@ the-rime-of-the-ancient-mariner/
 
 ## Persistence
 
-Data is stored in a local SQLite database (default: `rime-ancient-mariner.db`) with auto-migration on first access.
+Data is stored in a global SQLite database (default: `~/.pi/agent/the-ancient-mariner/rime-ancient-mariner.db`) with auto-migration on first access.
 
 ### Schema
 
@@ -199,7 +199,7 @@ The store is lazy-initialized and cached at module level — first call opens SQ
 | `bun run lint:fix` | Biome linter + auto-fix |
 | `bun run format` | Biome formatter |
 | `bun run db:generate` | Generate Drizzle migration from schema changes |
-| `bun run db:studio` | Open Drizzle Studio against the local DB |
+| `bun run db:studio` | Open Drizzle Studio against the global ancient-mariner DB |
 
 ### Local Testing
 
