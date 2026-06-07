@@ -146,7 +146,7 @@ Canonical examples in this repo:
 | `bun run lint:fix` | Run Biome linter + auto-fix |
 | `bun run format` | Run Biome formatter |
 | `bun run db:generate` | Emit a new Drizzle migration from `src/memory/schema.ts` |
-| `bun run db:studio` | Open Drizzle Studio against `rime-ancient-mariner.db` |
+| `bun run db:studio` | Open Drizzle Studio against the global ancient-mariner DB |
 
 **Pre-commit:** Husky runs `lint-staged` on `*.{js,ts,json,md}` via `biome check --write --no-errors-on-unmatched`.
 
@@ -164,7 +164,7 @@ Schema change workflow:
 2. Run `bun run db:generate`
 3. Commit the new migration file alongside the schema change
 
-Default DB file: `rime-ancient-mariner.db` at the repo root.
+Default DB file: `~/.pi/agent/the-ancient-mariner/rime-ancient-mariner.db`. Override with `THE_ANCIENT_MARINER_DB_PATH` if needed.
 
 ---
 
