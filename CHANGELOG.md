@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.1.1] - 2026-06-07
+
+- update root for creation of database
+- lifecycle discover prompts and skills only in local dev mode  
 
 ## [0.1.0] - 2026-06-03
 
