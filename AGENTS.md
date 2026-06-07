@@ -42,7 +42,7 @@ the-ancient-mariner/
 │   └── db/
 │       └── connection.ts      # openDb() — internal; only memory/store imports it
 ├── extensions/                # pi extensions (runtime-loaded; not compiled)
-│   ├── lifecycle.ts           # session_start + resources_discover
+│   ├── lifecycle.ts           # session_start + optional local resources_discover
 │   ├── memory-extension.ts        # tools backed by src/memory
 │   └── session-extension.ts       # tool + command backed by src/session
 ├── migrations/                # Drizzle migrations (generated from src/memory/schema.ts)
@@ -131,7 +131,7 @@ export default function (pi: ExtensionAPI) {
 
 Canonical examples in this repo:
 - `extensions/memory-extension.ts` — tool registration
-- `extensions/lifecycle.ts` — `session_start` + `resources_discover`
+- `extensions/lifecycle.ts` — `session_start` + optional local-only `resources_discover`
 - `extensions/session-extension.ts` — tool + command sharing logic via `src/session/info.ts`
 
 ---
@@ -185,15 +185,15 @@ Create `.pi/extensions/index.ts`:
 
 ```typescript
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import lifeCycleExtension from "../extensions/lifecycle.ts";
-import memoryExtension from "../extensions/memory-extension.ts";
-import sessionExtension from "../extensions/session-extension.ts";
-import planModeExtension from "../extensions/plan-mode.ts";
+import lifeCycleExtension from "../../extensions/lifecycle.ts";
+import memoryExtension from "../../extensions/memory-extension.ts";
+import sessionExtension from "../../extensions/session-extension.ts";
+import planModeExtension from "../../extensions/plan-mode.ts";
 
 export default function (pi: ExtensionAPI) {
 	sessionExtension(pi);
 	memoryExtension(pi);
-	lifeCycleExtension(pi);
+	lifeCycleExtension(pi, { discoverResources: true });
 	planModeExtension(pi);
 }
 ```
@@ -238,4 +238,5 @@ Both directories are referenced in `package.json` → `"pi"`.
 - **NodeNext resolution**: `tsconfig.json` sets `"module": "NodeNext"` and `"moduleResolution": "NodeNext"`. Compiled-output imports need `.js` extensions.
 - **Extensions import `.ts` directly** because pi loads them at runtime without `tsc`. Do not change those imports to `.js`.
 - **`dist/` is vestigial**: `tsc` compiles `src/` to it, but `package.json` has no `main`/`exports` field — nobody consumes it. Don't commit it; don't depend on it.
+- **Local resource discovery only**: `lifeCycleExtension(pi, { discoverResources: true })` is for the local `.pi/extensions/index.ts` harness only. Do not enable it for package/production loading because `package.json["pi"]` already declares `skills/` and `prompts/`; enabling both causes prompt collisions.
 - **MVP direction (`docs/mvp.md`)**: knowledge tracking — staleness detection, search, summary, store. New tools should live in `extensions/memory-extension.ts` and delegate to `src/memory/`.
