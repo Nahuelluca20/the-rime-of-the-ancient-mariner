@@ -28,6 +28,8 @@ export interface MemoriesTableDialogOptions {
 	onSubmit: (selected: SelectedMemoryRef[]) => void;
 	onCancel: () => void;
 	theme: SimpleTheme;
+	/** "multi" (default) toggles checkboxes; "single" submits the focused row on enter. */
+	selectionMode?: "single" | "multi";
 }
 
 /**
@@ -63,6 +65,7 @@ export class MemoriesTableDialog {
 	private onSubmit: (selected: SelectedMemoryRef[]) => void;
 	private onCancel: () => void;
 	private theme: SimpleTheme;
+	private selectionMode: "single" | "multi";
 
 	private pageIndex = 0;
 	private focusedIndex = 0;
@@ -83,6 +86,7 @@ export class MemoriesTableDialog {
 		this.onSubmit = opts.onSubmit;
 		this.onCancel = opts.onCancel;
 		this.theme = opts.theme;
+		this.selectionMode = opts.selectionMode ?? "multi";
 	}
 
 	handleInput(data: string): void {
@@ -102,7 +106,7 @@ export class MemoriesTableDialog {
 		}
 
 		if (matchesKey(data, Key.enter)) {
-			this.onSubmit(this.getSelectedRefs());
+			this.submitSelection();
 			return;
 		}
 
@@ -124,8 +128,10 @@ export class MemoriesTableDialog {
 		}
 
 		if (matchesKey(data, Key.space) || data === " ") {
-			const current = this.currentRow();
-			if (current) this.toggleSelected(current);
+			if (this.selectionMode === "multi") {
+				const current = this.currentRow();
+				if (current) this.toggleSelected(current);
+			}
 			return;
 		}
 
@@ -167,9 +173,10 @@ export class MemoriesTableDialog {
 		}
 
 		const pageLabel = `Page ${this.pageIndex + 1}/${this.pageCount()}`;
-		const countLabel = `${this.selectedKeys.size} selected`;
+		const countLabel =
+			this.selectionMode === "multi" ? ` ${muted(`${this.selectedKeys.size} selected`)}` : "";
 		lines.push(
-			contentLine(`${this.theme.bold("Recent memories")} ${muted(pageLabel)} ${muted(countLabel)}`),
+			contentLine(`${this.theme.bold("Recent memories")} ${muted(pageLabel)}${countLabel}`),
 		);
 		lines.push(contentLine(muted("─".repeat(innerW))));
 
@@ -185,8 +192,8 @@ export class MemoriesTableDialog {
 				const checked = this.selectedKeys.has(memoryKey(row));
 				const cursor = focused ? ">" : " ";
 				const checkbox = checked ? success("[x]") : muted("[ ]");
+				const prefix = this.selectionMode === "single" ? `${cursor} ` : `${cursor} ${checkbox} `;
 				const updated = formatDate(row.updatedAt);
-				const prefix = `${cursor} ${checkbox} `;
 				const datePart = muted(updated);
 				const mainWidth = Math.max(8, innerW - visibleWidth(prefix) - updated.length - 1);
 				const name = `${row.projectName} / ${row.name}`;
@@ -238,13 +245,15 @@ export class MemoriesTableDialog {
 		}
 
 		if (matchesKey(data, Key.enter)) {
-			this.onSubmit(this.getSelectedRefs());
+			this.submitSelection();
 			return;
 		}
 
 		if (matchesKey(data, Key.space) || data === " ") {
-			const current = this.currentRow();
-			if (current) this.toggleSelected(current);
+			if (this.selectionMode === "multi") {
+				const current = this.currentRow();
+				if (current) this.toggleSelected(current);
+			}
 		}
 	}
 
@@ -328,6 +337,16 @@ export class MemoriesTableDialog {
 		this.invalidate();
 	}
 
+	private submitSelection(): void {
+		if (this.selectionMode === "single") {
+			const current = this.currentRow();
+			if (!current) return;
+			this.onSubmit([{ projectName: current.projectName, memoryName: current.name }]);
+			return;
+		}
+		this.onSubmit(this.getSelectedRefs());
+	}
+
 	private getSelectedRefs(): SelectedMemoryRef[] {
 		return [...this.selectedKeys].map((key) => {
 			const [projectName = "", memoryName = ""] = key.split("\0");
@@ -341,6 +360,11 @@ export class MemoriesTableDialog {
 
 	private footerHint(): string {
 		const hints = MEMORY_TABLE_KEY_HINTS;
+		if (this.selectionMode === "single") {
+			if (this.previewOpen)
+				return `${hints.vertical} scroll preview • enter choose • ${hints.previewBack} back`;
+			return `${hints.vertical} navigate • ${hints.previewToggle} preview • ${hints.horizontal} pages • enter choose • esc cancel`;
+		}
 		if (this.previewOpen)
 			return `${hints.vertical} scroll preview • space select • enter insert • ${hints.previewBack} back`;
 		return `${hints.vertical} navigate • ${hints.previewToggle} preview • space select • ${hints.horizontal} pages • enter insert • esc cancel`;

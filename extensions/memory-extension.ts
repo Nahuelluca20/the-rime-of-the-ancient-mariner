@@ -1,19 +1,26 @@
 import { readFile } from "node:fs/promises";
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import {
 	type MemoryInfoForRetrieval,
 	formatMemoriesForContext,
 	resolveMemoryForContext,
 } from "../src/memory/context.ts";
+import {
+	type MemoryTarget,
+	type MergeDecision,
+	createSaveCoordinator,
+} from "../src/memory/merge.ts";
 import { updateSession } from "../src/memory/session-commands.ts";
 import { SESSION_TYPES, saveSessionSummary } from "../src/memory/session-summary.ts";
-import { openMemoryStore } from "../src/memory/store.ts";
+import { type AgentMemory, openMemoryStore } from "../src/memory/store.ts";
 import { SimpleDialog } from "../src/ui/example.ts";
-import { MemoriesTableDialog } from "../src/ui/memories-table.ts";
+import { MemoriesTableDialog, type SelectedMemoryRef } from "../src/ui/memories-table.ts";
+import { SelectDialog } from "../src/ui/select-dialog.ts";
 
 const store = openMemoryStore();
 const context = resolveMemoryForContext({ store: store });
+const coordinator = createSaveCoordinator();
 
 export default function (pi: ExtensionAPI) {
 	function sendMemoriesToModel(
@@ -31,6 +38,55 @@ export default function (pi: ExtensionAPI) {
 		}
 
 		return memories.length;
+	}
+
+	async function promptMergeDecision(
+		ctx: ExtensionContext,
+		target: MemoryTarget,
+		_existing: AgentMemory,
+	): Promise<MergeDecision> {
+		// Headless: never overwrite an existing memory silently.
+		if (!ctx.hasUI) return "cancel";
+
+		const decision = await ctx.ui.custom<MergeDecision | null>(
+			(tui, theme, _kb, done) => {
+				const dialog = new SelectDialog<MergeDecision>({
+					title: "Memory already exists",
+					message: `"${target.name}" already exists in project "${target.projectName}".\nWhat should happen with the new summary?`,
+					options: [
+						{
+							label: "Mix",
+							description: "Have the model merge old + new into one summary",
+							value: "mix",
+						},
+						{
+							label: "Replace",
+							description: "Overwrite the existing memory entirely",
+							value: "replace",
+						},
+						{
+							label: "Cancel",
+							description: "Keep the existing memory; save nothing",
+							value: "cancel",
+						},
+					],
+					onSubmit: done,
+					onCancel: () => done(null),
+					theme,
+				});
+				return {
+					render: (width: number) => dialog.render(width),
+					invalidate: () => dialog.invalidate(),
+					handleInput: (data: string) => {
+						dialog.handleInput(data);
+						tui.requestRender();
+					},
+				};
+			},
+			{ overlay: true, overlayOptions: { minWidth: 60, margin: 4 } },
+		);
+
+		return decision ?? "cancel";
 	}
 
 	pi.registerTool({
@@ -110,7 +166,9 @@ export default function (pi: ExtensionAPI) {
 		name: "save_session_summary",
 		label: "Save Session Summary",
 		description:
-			"Persist a session summary, including optional session type and tags, into the current session's memory row.",
+			"Persist a session summary, including optional session type and tags, into the current session's memory row. " +
+			"If the target memory already exists the user will be asked to mix, replace, or cancel. " +
+			"If the result asks you to merge, compose a single merged summary and call this tool exactly once more.",
 		parameters: Type.Object({
 			title: Type.String(),
 			description: Type.String(),
@@ -121,10 +179,16 @@ export default function (pi: ExtensionAPI) {
 			tags: Type.Optional(Type.Array(Type.String())),
 		}),
 		async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
-			const { message, severity } = saveSessionSummary(ctx, store, params);
+			const outcome = await saveSessionSummary(
+				ctx,
+				store,
+				coordinator,
+				params,
+				(target, existing) => promptMergeDecision(ctx, target, existing),
+			);
 			return {
-				content: [{ type: "text", text: message }],
-				details: { severity, ...params },
+				content: [{ type: "text", text: outcome.message }],
+				details: { status: outcome.status, severity: outcome.severity, ...params },
 			};
 		},
 	});
@@ -204,6 +268,86 @@ export default function (pi: ExtensionAPI) {
 			const memoryLoads = sendMemoriesToModel(selected, { triggerTurn: true });
 			ctx.ui.notify(`Inserted ${memoryLoads} memor${memoryLoads === 1 ? "y" : "ies"}.`, "info");
 		},
+	});
+
+	pi.registerCommand("target-memory", {
+		description: "Point memory saves at an existing memory (use `clear` to reset)",
+		handler: async (args, ctx) => {
+			if (args.trim() === "clear") {
+				coordinator.setTarget(null);
+				ctx.ui.notify("Memory save target cleared; saves use the session name again.", "info");
+				pi.sendMessage(
+					{
+						customType: "memory-target",
+						content:
+							"The memory save target was cleared. Future save_session_summary calls write to the session-named memory again.",
+						display: true,
+					},
+					{ deliverAs: "steer", triggerTurn: false },
+				);
+				return;
+			}
+
+			const pageSize = 5;
+			const loadPage = (pageIndex: number) =>
+				store.listRecentMemories(pageSize, pageIndex * pageSize);
+			const totalRows = store.countMemories();
+			const rows = loadPage(0);
+
+			const selected = await ctx.ui.custom<SelectedMemoryRef | null>(
+				(tui, theme, _kb, done) => {
+					const dialog = new MemoriesTableDialog({
+						title: "Target Memory",
+						rows,
+						totalRows,
+						pageSize,
+						loadPage,
+						selectionMode: "single",
+						onSubmit: (refs) => done(refs[0] ?? null),
+						onCancel: () => done(null),
+						theme,
+					});
+					return {
+						render: (width: number) => dialog.render(width),
+						invalidate: () => dialog.invalidate(),
+						handleInput: (data: string) => {
+							dialog.handleInput(data);
+							tui.requestRender();
+						},
+					};
+				},
+				{
+					overlay: true,
+					overlayOptions: { width: "90%", minWidth: 80, maxHeight: "90%", margin: 2 },
+				},
+			);
+
+			if (!selected) {
+				ctx.ui.notify("Target unchanged.", "info");
+				return;
+			}
+
+			coordinator.setTarget({ projectName: selected.projectName, name: selected.memoryName });
+			ctx.ui.notify(
+				`Memory saves now target "${selected.projectName} / ${selected.memoryName}".`,
+				"info",
+			);
+			sendMemoriesToModel([selected]);
+			pi.sendMessage(
+				{
+					customType: "memory-target",
+					content: `Future save_session_summary calls will write to memory "${selected.memoryName}" in project "${selected.projectName}". It already exists, so the user will choose mix/replace/cancel at save time.`,
+					display: true,
+				},
+				{ deliverAs: "steer", triggerTurn: false },
+			);
+		},
+	});
+
+	// A mix approval is only meant for the model's follow-up call within the
+	// same turn; drop it if the turn ends without that call.
+	pi.on("agent_end", async () => {
+		coordinator.clearPendingMerge();
 	});
 
 	pi.registerCommand("pick", {
