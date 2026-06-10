@@ -23,6 +23,7 @@
   },
   "trustedDependencies": [
     "@google/genai",
+    "better-sqlite3",
     "@biomejs/biome",
     "protobufjs",
   ],
