@@ -47,6 +47,22 @@ When you add a new extension file, remember to add its import to `.pi/extensions
 
 Do **not** enable `discoverResources` in package/production loading. The installed package already declares `skills/` and `prompts/` in `package.json`; enabling both would load the same prompt templates twice and produce `[Prompt conflicts]` warnings.
 
+## Plan Mode Shortcut and Keybinding Collision
+
+The plan-mode extension registers `Shift+Tab` to toggle `/plan-mode`. Default pi uses `Shift+Tab` for `app.thinking.cycle`, and pi skips extension shortcuts that collide with reserved built-in keybindings.
+
+For local testing, remap the built-in thinking shortcuts in `~/.pi/agent/keybindings.json` before expecting `Shift+Tab` to toggle plan mode:
+
+```json
+{
+	"app.clipboard.pasteImage": "ctrl+v",
+	"app.thinking.toggle": "ctrl+r",
+	"app.thinking.cycle": "ctrl+t"
+}
+```
+
+Run `/reload` in pi after changing keybindings. This keeps `Ctrl+V` for paste-image on macOS, uses `Ctrl+T` to cycle thinking level, and frees `Shift+Tab` for plan mode.
+
 ## Verification
 
 | Step | Command |

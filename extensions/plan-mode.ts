@@ -22,6 +22,11 @@ export default function planModeExtension(pi: ExtensionAPI) {
 		handler: async (args, ctx) => planMode.handleCommand(args, ctx),
 	});
 
+	pi.registerShortcut("shift+tab", {
+		description: "Toggle native read-only plan mode",
+		handler: async (ctx) => planMode.handleCommand("toggle", ctx),
+	});
+
 	pi.on("session_start", async (_event, ctx) => {
 		planMode.restore(ctx, pi.getFlag("plan") === true);
 	});

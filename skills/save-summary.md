@@ -114,8 +114,6 @@ Step-by-step behavior or component relationships.
 ## Key files
 - `path`: what it does in this flow.
 
-## Gotchas / edge cases
-Important details that are easy to miss.
 ```
 
 ### `mixed`
@@ -133,8 +131,6 @@ Goal, findings, decisions, code touched/read, and next steps for this thread.
 ## Cross-thread decisions
 Decisions or constraints that affect more than one thread.
 
-## Open questions / next steps
-Prioritized follow-ups.
 ```
 
 ## Procedure
