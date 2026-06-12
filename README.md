@@ -60,6 +60,7 @@ Supported `sessionType` values are `implementation`, `code-exploration`, `implem
 | `/recent-memories` | Open a paged picker for recent memories and send selected memories to the LLM |
 | `/session-info` | Print current session metadata (ID, file, name, CWD, entries) |
 | `/plan-mode [on\|off\|toggle\|status]` | Toggle native read-only plan mode |
+| `Shift+Tab` | Toggle native read-only plan mode, if `Shift+Tab` is not already bound to a built-in pi action |
 | `--plan` (flag) | Start pi with plan mode enabled from the start |
 
 ### Recent Memories
@@ -91,6 +92,18 @@ Submitted memories are formatted with the same context renderer used by the `ins
 ### Plan Mode
 
 Plan mode is a native read-only mode that blocks all filesystem writes, code edits, config changes, and unsafe bash commands. The agent can only use read-only tools (`read`, `grep`, `find`, `ls`, safe `bash` commands, etc.) and must call `plan_exit` to request user approval before leaving.
+
+The extension registers `Shift+Tab` as a shortcut for toggling plan mode. In default pi, `Shift+Tab` is already bound to `app.thinking.cycle`, so users who want the plan-mode shortcut must remap that built-in action in `~/.pi/agent/keybindings.json` to avoid a collision:
+
+```json
+{
+	"app.clipboard.pasteImage": "ctrl+v",
+	"app.thinking.toggle": "ctrl+r",
+	"app.thinking.cycle": "ctrl+t"
+}
+```
+
+After editing the file, run `/reload` in pi. With the example above, `Shift+Tab` toggles plan mode, `Ctrl+T` cycles thinking level, `Ctrl+R` hides/shows thinking blocks, and `Ctrl+V` keeps the default paste-image behavior on macOS.
 
 **Blocked operations in plan mode:**
 - All file writes (`edit`, `write`)
