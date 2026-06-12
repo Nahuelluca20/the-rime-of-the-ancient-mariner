@@ -2,6 +2,13 @@ import { readFile } from "node:fs/promises";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { isReadOnlyBashCommand } from "./bash-safety.ts";
+import {
+	PLAN_MODE_LABEL,
+	type PlanModeEditorFactory,
+	createPlanModeEditorFactory,
+	planModeMuted,
+	planModeTitle,
+} from "./editor.ts";
 import { buildPlanInfo, renderPlanPrompt } from "./prompt.ts";
 
 const STATE_ENTRY_TYPE = "plan-mode-state";
@@ -65,6 +72,8 @@ interface CustomEntryLike {
 export function openPlanModeSession(pi: ExtensionAPI, options: PlanModeOptions): PlanModeSession {
 	let enabled = false;
 	let savedActiveTools: string[] | undefined;
+	let savedEditorComponent: PlanModeEditorFactory | undefined;
+	let hasPlanModeEditor = false;
 	let exitRequested = false;
 
 	function saveState(): void {
@@ -80,22 +89,38 @@ export function openPlanModeSession(pi: ExtensionAPI, options: PlanModeOptions):
 		savedActiveTools = pi.getActiveTools().filter((name) => name !== PLAN_EXIT_TOOL);
 	}
 
+	function installPlanModeEditor(ctx: ExtensionContext): void {
+		if (!ctx.hasUI || hasPlanModeEditor) return;
+
+		savedEditorComponent = ctx.ui.getEditorComponent();
+		hasPlanModeEditor = true;
+		ctx.ui.setEditorComponent(createPlanModeEditorFactory());
+	}
+
+	function restoreEditor(ctx: ExtensionContext): void {
+		if (!ctx.hasUI || !hasPlanModeEditor) return;
+
+		ctx.ui.setEditorComponent(savedEditorComponent);
+		savedEditorComponent = undefined;
+		hasPlanModeEditor = false;
+	}
+
 	function refreshUi(ctx: ExtensionContext): void {
 		if (!ctx.hasUI) return;
 
 		if (!enabled) {
 			ctx.ui.setStatus("plan-mode", undefined);
 			ctx.ui.setWidget("plan-mode", undefined);
+			restoreEditor(ctx);
 			return;
 		}
 
-		ctx.ui.setStatus("plan-mode", ctx.ui.theme.fg("warning", "Making a good plan"));
+		installPlanModeEditor(ctx);
 		ctx.ui.setWidget(
 			"plan-mode",
 			[
-				ctx.ui.theme.fg("warning", "plan mode: read-only"),
-				ctx.ui.theme.fg("dim", "/plan-mode off to leave"),
-				ctx.ui.theme.fg("dim", "Write/edit and unsafe bash are blocked; finish with plan_exit."),
+				planModeMuted("use shift+tab or /plan-mode off to leave"),
+				planModeMuted("Write/edit and unsafe bash are blocked; finish with plan_exit."),
 			],
 			{ placement: "belowEditor" },
 		);
