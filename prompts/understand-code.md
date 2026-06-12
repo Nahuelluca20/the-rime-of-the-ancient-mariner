@@ -32,13 +32,11 @@ This is a `code-understanding` session: optimize for an accurate mental model, n
 
 Return a concise code-understanding brief:
 
-1. **Understanding goal** — what was explained.
+1. **Title** — what was explained.
 2. **Short answer** — the core mental model in a few sentences.
 3. **Flow / architecture** — step-by-step behavior or component relationships.
 4. **Key files and symbols** — `path`: important functions/types and responsibilities.
 5. **Data and state** — important shapes, persistence, mutation, or lifecycle details.
-6. **Gotchas / edge cases** — meaningful details a future session should know.
-7. **Open questions** — only if something remains unknown.
-8. **Memory handoff** — 3–6 bullets suitable for saving as `code-understanding`.
+6. **Memory handoff** — 3–6 bullets suitable for saving as `code-understanding`.
 
 Do not implement anything. The goal is explanation and durable understanding.
