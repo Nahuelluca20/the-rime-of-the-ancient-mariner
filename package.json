@@ -7,6 +7,9 @@
 	"type": "module",
 	"scripts": {
 		"build": "tsc",
+		"test": "bun run test:unit && bun run test:integration",
+		"test:unit": "bun test tests/unit",
+		"test:integration": "node --experimental-strip-types --test tests/integration/*.test.ts",
 		"lint": "biome check .",
 		"lint:fix": "biome check . --write",
 		"format": "biome format . --write",
