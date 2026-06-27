@@ -9,7 +9,6 @@ import {
 import { updateSession } from "../src/memory/session-commands.ts";
 import { SESSION_TYPES, saveSessionSummary } from "../src/memory/session-summary.ts";
 import { openMemoryStore } from "../src/memory/store.ts";
-import { SimpleDialog } from "../src/ui/example.ts";
 import { MemoriesTableDialog } from "../src/ui/memories-table.ts";
 
 const store = openMemoryStore();
@@ -203,27 +202,6 @@ export default function (pi: ExtensionAPI) {
 
 			const memoryLoads = sendMemoriesToModel(selected, { triggerTurn: true });
 			ctx.ui.notify(`Inserted ${memoryLoads} memor${memoryLoads === 1 ? "y" : "ies"}.`, "info");
-		},
-	});
-
-	pi.registerCommand("pick", {
-		description: "Show text in an overlay dialog",
-		handler: async (args, ctx) => {
-			const text = args || "No text provided. Usage: /pick <message>";
-
-			await ctx.ui.custom<void>(
-				(_tui, theme, _kb, done) => {
-					const dialog = new SimpleDialog({
-						title: "ancient-mariner",
-						text,
-						minHeight: 6,
-						onClose: () => done(),
-						theme,
-					});
-					return dialog;
-				},
-				{ overlay: true, overlayOptions: { margin: 20 } },
-			);
 		},
 	});
 }

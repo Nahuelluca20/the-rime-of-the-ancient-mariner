@@ -1,10 +1,13 @@
 import {
+	Box,
+	Container,
 	Key,
 	type KeyId,
+	Spacer,
+	Text,
 	matchesKey,
 	truncateToWidth,
 	visibleWidth,
-	wrapTextWithAnsi,
 } from "@earendil-works/pi-tui";
 import type { RecentMemory } from "../memory/store.ts";
 
@@ -28,6 +31,12 @@ export interface MemoriesTableDialogOptions {
 	onSubmit: (selected: SelectedMemoryRef[]) => void;
 	onCancel: () => void;
 	theme: SimpleTheme;
+	/**
+	 * Total dialog height in lines (including borders). The dialog is padded to this
+	 * height in every mode so it never resizes when toggling or scrolling the preview.
+	 * Defaults to {@link DEFAULT_MAX_HEIGHT}.
+	 */
+	maxHeight?: number;
 }
 
 /**
@@ -36,8 +45,22 @@ export interface MemoriesTableDialogOptions {
  * Shows memories newest-first, five per page by default. The dialog owns cursor,
  * page, checked state, and preview scrolling so callers only provide page loading
  * and receive the final selected memory refs.
+ *
+ * Rendering is composed from pi's TUI building blocks (`Container`, `Text`, `Box`,
+ * `Spacer`) for the inner content, then wrapped with a full box (`╭│╰`) so the
+ * side walls `│` frame every line. Only the bespoke behaviours (multi-select
+ * checkboxes, paging, scrollable preview) are kept in-house.
  */
-const DEFAULT_PREVIEW_HEIGHT = 18;
+
+/** Default total dialog height (lines), includes top/bottom borders. */
+const DEFAULT_MAX_HEIGHT = 26;
+/**
+ * Chrome lines excluding the body and the two borders: header counts, divider,
+ * spacer above the footer, and the footer hint itself. bodyHeight = maxHeight - 6.
+ */
+const CHROME_LINES = 6;
+/** Lines inside the preview body that are not the viewport: title + scroll info. */
+const PREVIEW_CHROME_LINES = 2;
 
 const MEMORY_TABLE_KEYS = {
 	previewToggle: [Key.tab, "a"],
@@ -63,6 +86,7 @@ export class MemoriesTableDialog {
 	private onSubmit: (selected: SelectedMemoryRef[]) => void;
 	private onCancel: () => void;
 	private theme: SimpleTheme;
+	private maxHeight: number;
 
 	private pageIndex = 0;
 	private focusedIndex = 0;
@@ -83,6 +107,7 @@ export class MemoriesTableDialog {
 		this.onSubmit = opts.onSubmit;
 		this.onCancel = opts.onCancel;
 		this.theme = opts.theme;
+		this.maxHeight = opts.maxHeight ?? DEFAULT_MAX_HEIGHT;
 	}
 
 	handleInput(data: string): void {
@@ -137,77 +162,70 @@ export class MemoriesTableDialog {
 			return this.cachedLines;
 		}
 
-		const borderFg = (s: string) => this.theme.fg("accent", s);
-		const muted = (s: string) => this.theme.fg("dim", s);
-		const success = (s: string) => this.theme.fg("success", s);
-		const warning = (s: string) => this.theme.fg("warning", s);
-		const badge = (s: string) => this.theme.fg("accent", s);
+		const theme = this.theme;
+		const accent = (s: string) => theme.fg("accent", s);
+		const muted = (s: string) => theme.fg("dim", s);
+		const warning = (s: string) => theme.fg("warning", s);
+		const success = (s: string) => theme.fg("success", s);
+		const wall = (s: string) => theme.fg("accent", s);
 
-		const cw = Math.max(0, width - 2);
-		const padX = cw >= 2 ? 1 : 0;
-		const gutter = " ".repeat(padX);
-		const innerW = Math.max(0, cw - padX * 2);
+		// Inner area between the side walls.
+		const innerW = Math.max(0, width - 2);
+		// Text components use paddingX = 1, so content sits one cell in from each wall.
+		const contentW = Math.max(1, innerW - 2);
 
-		const decorateFocused = (line: string) => this.theme.bg("selectedBg", line);
-		const contentLine = (inner: string, decorate?: (line: string) => string) => {
-			const padded = padToWidth(inner, innerW);
-			const styled = decorate ? decorate(padded) : padded;
-			return `${borderFg("│")}${gutter}${styled}${gutter}${borderFg("│")}`;
-		};
-		const blankLine = () => contentLine("");
+		// ── Build the inner content (no borders, no side walls) ──
+		const inner = new Container();
 
-		const lines: string[] = [];
-
-		if (this.title) {
-			const label = truncateToWidth(` ${this.title} `, cw, "");
-			const dashes = "─".repeat(Math.max(0, cw - visibleWidth(label)));
-			lines.push(borderFg(`╭${label}${dashes}╮`));
-		} else {
-			lines.push(borderFg(`╭${"─".repeat(cw)}╮`));
-		}
-
+		// Header: counts (truncated so it stays a single line).
 		const pageLabel = `Page ${this.pageIndex + 1}/${this.pageCount()}`;
 		const countLabel = `${this.selectedKeys.size} selected`;
-		lines.push(
-			contentLine(`${this.theme.bold("Recent memories")} ${muted(pageLabel)} ${muted(countLabel)}`),
+		const header = truncateToWidth(
+			`${theme.bold("Recent memories")} ${muted(pageLabel)} ${muted(countLabel)}`,
+			contentW,
+			"",
 		);
-		lines.push(contentLine(muted("─".repeat(innerW))));
+		inner.addChild(new Text(header, 1, 0));
+		inner.addChild(new Text(muted("─".repeat(contentW)), 1, 0));
 
+		// Body section, padded to a fixed height so the dialog never resizes.
+		const body = new Container();
 		if (this.totalRows === 0) {
-			lines.push(contentLine(warning("No memories found.")));
+			body.addChild(new Text(warning("No memories found."), 1, 0));
 		} else if (this.previewOpen) {
-			this.renderPreview(lines, contentLine, muted, warning, innerW);
+			this.buildPreview(body, innerW, contentW, muted, warning, accent);
 		} else {
-			for (let index = 0; index < this.rows.length; index++) {
-				const row = this.rows[index];
-				if (!row) continue;
-				const focused = index === this.focusedIndex;
-				const checked = this.selectedKeys.has(memoryKey(row));
-				const cursor = focused ? ">" : " ";
-				const checkbox = checked ? success("[x]") : muted("[ ]");
-				const updated = formatDate(row.updatedAt);
-				const prefix = `${cursor} ${checkbox} `;
-				const datePart = muted(updated);
-				const mainWidth = Math.max(8, innerW - visibleWidth(prefix) - updated.length - 1);
-				const name = `${row.projectName} / ${row.name}`;
-				const main = focused ? this.theme.fg("accent", this.theme.bold(name)) : name;
-				const titleLine = `${prefix}${padToWidth(main, mainWidth)} ${datePart}`;
-				const description = row.description || "(no description)";
-				const typeBadge = formatSessionTypeBadge(row.sessionType, badge);
-				const descriptionText = typeBadge
-					? `${typeBadge} ${muted(description)}`
-					: muted(description);
-				const descriptionLine = `    ${descriptionText}`;
-
-				lines.push(contentLine(titleLine, focused ? decorateFocused : undefined));
-				lines.push(contentLine(descriptionLine, focused ? decorateFocused : undefined));
-				if (index < this.rows.length - 1) lines.push(blankLine());
-			}
+			this.buildRows(body, contentW, muted, accent, success);
+		}
+		const bodyHeight = this.bodyHeight();
+		const bodyLineCount = body.render(innerW).length;
+		inner.addChild(body);
+		const bodyPadding = Math.max(0, bodyHeight - bodyLineCount);
+		if (bodyPadding > 0) {
+			inner.addChild(new Spacer(bodyPadding));
 		}
 
-		lines.push(blankLine());
-		lines.push(contentLine(muted(this.footerHint())));
-		lines.push(borderFg(`╰${"─".repeat(cw)}╯`));
+		// Footer (pre-truncated so it occupies a single line).
+		inner.addChild(new Spacer(1));
+		inner.addChild(new Text(muted(truncateToWidth(this.footerHint(), contentW, "")), 1, 0));
+
+		const innerLines = inner.render(innerW);
+
+		// ── Assemble the boxed view: top border (with title), walled lines, bottom ──
+		const lines: string[] = [];
+		if (this.title) {
+			const label = truncateToWidth(` ${this.title} `, innerW, "");
+			const dashes = "─".repeat(Math.max(0, innerW - visibleWidth(label)));
+			lines.push(wall(`╭${label}${dashes}╮`));
+		} else {
+			lines.push(wall(`╭${"─".repeat(innerW)}╮`));
+		}
+
+		for (const line of innerLines) {
+			lines.push(`${wall("│")}${padToWidth(line, innerW)}${wall("│")}`);
+		}
+
+		lines.push(wall(`╰${"─".repeat(innerW)}╯`));
 
 		this.cachedLines = lines;
 		this.cachedWidth = width;
@@ -217,6 +235,113 @@ export class MemoriesTableDialog {
 	invalidate(): void {
 		this.cachedWidth = undefined;
 		this.cachedLines = undefined;
+	}
+
+	private buildRows(
+		body: Container,
+		contentW: number,
+		muted: (s: string) => string,
+		accent: (s: string) => string,
+		success: (s: string) => string,
+	): void {
+		const theme = this.theme;
+		const selectedBg = (s: string) => theme.bg("selectedBg", s);
+
+		for (let index = 0; index < this.rows.length; index++) {
+			const row = this.rows[index];
+			if (!row) continue;
+			const focused = index === this.focusedIndex;
+
+			const cursor = focused ? ">" : " ";
+			const checked = this.selectedKeys.has(memoryKey(row));
+			const checkbox = checked ? success("[x]") : muted("[ ]");
+			const updated = formatDate(row.updatedAt);
+			const prefix = `${cursor} ${checkbox} `;
+			const datePart = muted(updated);
+			const name = `${row.projectName} / ${row.name}`;
+			const main = focused ? accent(theme.bold(name)) : name;
+			const mainWidth = Math.max(8, contentW - visibleWidth(prefix) - updated.length - 1);
+			const titleLine = truncateToWidth(
+				`${prefix}${padToWidth(main, mainWidth)} ${datePart}`,
+				contentW,
+				"",
+			);
+
+			const description = row.description || "(no description)";
+			const typeBadge = formatSessionTypeBadge(row.sessionType, accent);
+			const descriptionText = typeBadge ? `${typeBadge} ${muted(description)}` : muted(description);
+			const descriptionLine = truncateToWidth(`    ${descriptionText}`, contentW, "");
+
+			const rowGroup = new Container();
+			rowGroup.addChild(new Text(titleLine, 1, 0));
+			rowGroup.addChild(new Text(descriptionLine, 1, 0));
+
+			if (focused) {
+				// Box paints the selected background across the full inner width.
+				const focusedBox = new Box(0, 0, selectedBg);
+				focusedBox.addChild(rowGroup);
+				body.addChild(focusedBox);
+			} else {
+				body.addChild(rowGroup);
+			}
+
+			if (index < this.rows.length - 1) {
+				body.addChild(new Spacer(1));
+			}
+		}
+	}
+
+	private buildPreview(
+		body: Container,
+		innerW: number,
+		contentW: number,
+		muted: (s: string) => string,
+		warning: (s: string) => string,
+		accent: (s: string) => string,
+	): void {
+		const theme = this.theme;
+		const row = this.currentRow();
+		if (!row) {
+			body.addChild(new Text(warning("No memory focused."), 1, 0));
+			return;
+		}
+
+		body.addChild(
+			new Text(
+				truncateToWidth(
+					accent(theme.bold(`Preview: ${row.projectName} / ${row.name}`)),
+					contentW,
+					"",
+				),
+				1,
+				0,
+			),
+		);
+
+		// Let the pi Text component word-wrap the preview, then viewport-slice it.
+		const previewComp = new Text(row.preview || "(no preview available)", 1, 0);
+		const wrapped = previewComp.render(innerW);
+
+		const viewportHeight = this.previewViewportHeight();
+		const maxScrollOffset = Math.max(0, wrapped.length - viewportHeight);
+		const scrollOffset = Math.min(this.previewScrollOffset, maxScrollOffset);
+		this.previewScrollOffset = scrollOffset;
+
+		const endLine = Math.min(wrapped.length, scrollOffset + viewportHeight);
+		const scrollInfo =
+			wrapped.length > viewportHeight
+				? `lines ${scrollOffset + 1}-${endLine}/${wrapped.length}`
+				: `${wrapped.length} line${wrapped.length === 1 ? "" : "s"}`;
+		body.addChild(new Text(muted(truncateToWidth(scrollInfo, contentW, "")), 1, 0));
+
+		for (const line of wrapped.slice(scrollOffset, endLine)) {
+			body.addChild(new Text(line, 1, 0));
+		}
+
+		const remaining = viewportHeight - (endLine - scrollOffset);
+		if (remaining > 0) {
+			body.addChild(new Spacer(remaining));
+		}
 	}
 
 	private handlePreviewInput(data: string): void {
@@ -245,47 +370,6 @@ export class MemoriesTableDialog {
 		if (matchesKey(data, Key.space) || data === " ") {
 			const current = this.currentRow();
 			if (current) this.toggleSelected(current);
-		}
-	}
-
-	private renderPreview(
-		lines: string[],
-		contentLine: (inner: string) => string,
-		muted: (text: string) => string,
-		warning: (text: string) => string,
-		innerW: number,
-	): void {
-		const row = this.currentRow();
-		if (!row) {
-			lines.push(contentLine(warning("No memory focused.")));
-			return;
-		}
-
-		const title = this.theme.fg(
-			"accent",
-			this.theme.bold(`Preview: ${row.projectName} / ${row.name}`),
-		);
-		lines.push(contentLine(title));
-
-		const wrapped = wrapPreviewText(row.preview || "(no preview available)", innerW);
-		const viewportHeight = this.previewViewportHeight();
-		const maxScrollOffset = Math.max(0, wrapped.length - viewportHeight);
-		const scrollOffset = Math.min(this.previewScrollOffset, maxScrollOffset);
-		this.previewScrollOffset = scrollOffset;
-
-		const endLine = Math.min(wrapped.length, scrollOffset + viewportHeight);
-		const scrollInfo =
-			wrapped.length > viewportHeight
-				? `lines ${scrollOffset + 1}-${endLine}/${wrapped.length}`
-				: `${wrapped.length} line${wrapped.length === 1 ? "" : "s"}`;
-		lines.push(contentLine(muted(scrollInfo)));
-
-		for (const line of wrapped.slice(scrollOffset, endLine)) {
-			lines.push(contentLine(line));
-		}
-
-		for (let lineCount = endLine - scrollOffset; lineCount < viewportHeight; lineCount++) {
-			lines.push(contentLine(""));
 		}
 	}
 
@@ -346,8 +430,14 @@ export class MemoriesTableDialog {
 		return `${hints.vertical} navigate • ${hints.previewToggle} preview • space select • ${hints.horizontal} pages • enter insert • esc cancel`;
 	}
 
+	/** Fixed body region height, so row mode and preview mode occupy the same space. */
+	private bodyHeight(): number {
+		return Math.max(0, this.maxHeight - CHROME_LINES);
+	}
+
+	/** Preview viewport lines = body height minus the preview title + scroll info. */
 	private previewViewportHeight(): number {
-		return DEFAULT_PREVIEW_HEIGHT;
+		return Math.max(1, this.bodyHeight() - PREVIEW_CHROME_LINES);
 	}
 
 	private pageCount(): number {
@@ -392,14 +482,9 @@ function matchesAnyKey(data: string, keys: readonly KeyId[]): boolean {
 }
 
 function padToWidth(text: string, width: number): string {
-	const truncated = truncateToWidth(text, width);
+	const truncated = truncateToWidth(text, width, "");
 	const padding = " ".repeat(Math.max(0, width - visibleWidth(truncated)));
 	return `${truncated}${padding}`;
-}
-
-function wrapPreviewText(text: string, width: number): string[] {
-	const wrapped = wrapTextWithAnsi(text, Math.max(1, width));
-	return wrapped.length > 0 ? wrapped : ["(no preview available)"];
 }
 
 function formatDate(date: Date | null | undefined): string {
