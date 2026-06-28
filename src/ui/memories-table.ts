@@ -1,3 +1,4 @@
+import type { Theme } from "@earendil-works/pi-coding-agent";
 import {
 	Box,
 	Container,
@@ -10,12 +11,6 @@ import {
 	visibleWidth,
 } from "@earendil-works/pi-tui";
 import type { RecentMemory } from "../memory/store.ts";
-
-interface SimpleTheme {
-	fg(category: string, text: string): string;
-	bg(category: string, text: string): string;
-	bold(text: string): string;
-}
 
 export interface SelectedMemoryRef {
 	projectName: string;
@@ -30,7 +25,7 @@ export interface MemoriesTableDialogOptions {
 	loadPage: (pageIndex: number) => RecentMemory[];
 	onSubmit: (selected: SelectedMemoryRef[]) => void;
 	onCancel: () => void;
-	theme: SimpleTheme;
+	theme: Theme;
 	/**
 	 * Total dialog height in lines (including borders). The dialog is padded to this
 	 * height in every mode so it never resizes when toggling or scrolling the preview.
@@ -55,26 +50,32 @@ export interface MemoriesTableDialogOptions {
 /** Default total dialog height (lines), includes top/bottom borders. */
 const DEFAULT_MAX_HEIGHT = 26;
 /**
- * Chrome lines excluding the body and the two borders: header counts, divider,
- * spacer above the footer, and the footer hint itself. bodyHeight = maxHeight - 6.
+ * Chrome lines excluding the body and the two outer borders: header row, divider,
+ * spacer above the footer, and the footer row itself (4 lines). Together with the
+ * 2 outer borders (already counted in maxHeight) that is 6, so bodyHeight = maxHeight - 6.
  */
 const CHROME_LINES = 6;
 /** Lines inside the preview body that are not the viewport: title + scroll info. */
 const PREVIEW_CHROME_LINES = 2;
 
-const MEMORY_TABLE_KEYS = {
-	previewToggle: [Key.tab, "a"],
-	up: [Key.up, "k"],
-	down: [Key.down, "j"],
-	left: [Key.left, "h"],
-	right: [Key.right, "l"],
-} as const satisfies Record<string, readonly KeyId[]>;
+/**
+ * Key bindings for the memories table. Each entry pairs the keys that drive an
+ * action with the short hint string shown for it in the footer, so rebinding a
+ * key touches only one place. `HINTS` below composes the per-arrow hints into the
+ * composite phrases the footer displays.
+ */
+const BINDINGS = {
+	previewToggle: { keys: [Key.tab, "a"], hint: "tab/a" },
+	up: { keys: [Key.up, "k"], hint: "↑" },
+	down: { keys: [Key.down, "j"], hint: "↓" },
+	left: { keys: [Key.left, "h"], hint: "←" },
+	right: { keys: [Key.right, "l"], hint: "→" },
+} as const satisfies Record<string, { keys: readonly KeyId[]; hint: string }>;
 
-const MEMORY_TABLE_KEY_HINTS = {
-	previewToggle: "tab/a",
-	vertical: "↑↓/jk",
-	horizontal: "←/→/hl",
-	previewBack: "tab/a/esc",
+const HINTS = {
+	vertical: `${BINDINGS.up.hint}${BINDINGS.down.hint}/jk`,
+	horizontal: `${BINDINGS.left.hint}/${BINDINGS.right.hint}/hl`,
+	previewBack: `${BINDINGS.previewToggle.hint}/esc`,
 } as const;
 
 export class MemoriesTableDialog {
@@ -85,7 +86,7 @@ export class MemoriesTableDialog {
 	private loadPage: (pageIndex: number) => RecentMemory[];
 	private onSubmit: (selected: SelectedMemoryRef[]) => void;
 	private onCancel: () => void;
-	private theme: SimpleTheme;
+	private theme: Theme;
 	private maxHeight: number;
 
 	private pageIndex = 0;
@@ -110,6 +111,12 @@ export class MemoriesTableDialog {
 		this.maxHeight = opts.maxHeight ?? DEFAULT_MAX_HEIGHT;
 	}
 
+	/**
+	 * Process one raw input chunk. Mutates dialog state and may resolve the dialog
+	 * by invoking `onSubmit`/`onCancel`. Does not repaint on its own: per pi's
+	 * `Component.handleInput` contract the host must request a render afterwards
+	 * (every input, including one that closes the dialog).
+	 */
 	handleInput(data: string): void {
 		if (this.previewOpen) {
 			this.handlePreviewInput(data);
@@ -121,7 +128,7 @@ export class MemoriesTableDialog {
 			return;
 		}
 
-		if (isPreviewToggleKey(data)) {
+		if (matchesAnyKey(data, BINDINGS.previewToggle.keys)) {
 			this.openPreview();
 			return;
 		}
@@ -136,13 +143,13 @@ export class MemoriesTableDialog {
 			return;
 		}
 
-		if (isUpKey(data)) {
+		if (matchesAnyKey(data, BINDINGS.up.keys)) {
 			this.focusedIndex = Math.max(0, this.focusedIndex - 1);
 			this.invalidate();
 			return;
 		}
 
-		if (isDownKey(data)) {
+		if (matchesAnyKey(data, BINDINGS.down.keys)) {
 			this.focusedIndex = Math.min(this.rows.length - 1, this.focusedIndex + 1);
 			this.invalidate();
 			return;
@@ -253,7 +260,7 @@ export class MemoriesTableDialog {
 			const focused = index === this.focusedIndex;
 
 			const cursor = focused ? ">" : " ";
-			const checked = this.selectedKeys.has(memoryKey(row));
+			const checked = this.selectedKeys.has(SelectionKeys.encode(row));
 			const checkbox = checked ? success("[x]") : muted("[ ]");
 			const updated = formatDate(row.updatedAt);
 			const prefix = `${cursor} ${checkbox} `;
@@ -323,9 +330,10 @@ export class MemoriesTableDialog {
 		const wrapped = previewComp.render(innerW);
 
 		const viewportHeight = this.previewViewportHeight();
+		// `previewScrollOffset` is a request; clip it for display only. The field is
+		// left untouched so handlePreviewInput owns the only mutation path.
 		const maxScrollOffset = Math.max(0, wrapped.length - viewportHeight);
 		const scrollOffset = Math.min(this.previewScrollOffset, maxScrollOffset);
-		this.previewScrollOffset = scrollOffset;
 
 		const endLine = Math.min(wrapped.length, scrollOffset + viewportHeight);
 		const scrollInfo =
@@ -345,18 +353,18 @@ export class MemoriesTableDialog {
 	}
 
 	private handlePreviewInput(data: string): void {
-		if (matchesKey(data, Key.escape) || isPreviewToggleKey(data)) {
+		if (matchesKey(data, Key.escape) || matchesAnyKey(data, BINDINGS.previewToggle.keys)) {
 			this.closePreview();
 			return;
 		}
 
-		if (isUpKey(data)) {
+		if (matchesAnyKey(data, BINDINGS.up.keys)) {
 			this.previewScrollOffset = Math.max(0, this.previewScrollOffset - 1);
 			this.invalidate();
 			return;
 		}
 
-		if (isDownKey(data)) {
+		if (matchesAnyKey(data, BINDINGS.down.keys)) {
 			this.previewScrollOffset += 1;
 			this.invalidate();
 			return;
@@ -387,9 +395,9 @@ export class MemoriesTableDialog {
 	}
 
 	private handlePageInput(data: string): void {
-		if (isLeftKey(data)) {
+		if (matchesAnyKey(data, BINDINGS.left.keys)) {
 			this.goToPage(Math.max(0, this.pageIndex - 1));
-		} else if (isRightKey(data)) {
+		} else if (matchesAnyKey(data, BINDINGS.right.keys)) {
 			this.goToPage(Math.min(this.pageCount() - 1, this.pageIndex + 1));
 		}
 	}
@@ -403,7 +411,7 @@ export class MemoriesTableDialog {
 	}
 
 	private toggleSelected(memory: RecentMemory): void {
-		const key = memoryKey(memory);
+		const key = SelectionKeys.encode(memory);
 		if (this.selectedKeys.has(key)) {
 			this.selectedKeys.delete(key);
 		} else {
@@ -413,10 +421,7 @@ export class MemoriesTableDialog {
 	}
 
 	private getSelectedRefs(): SelectedMemoryRef[] {
-		return [...this.selectedKeys].map((key) => {
-			const [projectName = "", memoryName = ""] = key.split("\0");
-			return { projectName, memoryName };
-		});
+		return [...this.selectedKeys].map(SelectionKeys.decode);
 	}
 
 	private currentRow(): RecentMemory | undefined {
@@ -424,10 +429,10 @@ export class MemoriesTableDialog {
 	}
 
 	private footerHint(): string {
-		const hints = MEMORY_TABLE_KEY_HINTS;
+		const hints = HINTS;
 		if (this.previewOpen)
 			return `${hints.vertical} scroll preview • space select • enter insert • ${hints.previewBack} back`;
-		return `${hints.vertical} navigate • ${hints.previewToggle} preview • space select • ${hints.horizontal} pages • enter insert • esc cancel`;
+		return `${hints.vertical} navigate • ${BINDINGS.previewToggle.hint} preview • space select • ${hints.horizontal} pages • enter insert • esc cancel`;
 	}
 
 	/** Fixed body region height, so row mode and preview mode occupy the same space. */
@@ -453,29 +458,15 @@ function formatSessionTypeBadge(
 	return decorate(`[${sessionType}]`);
 }
 
-function memoryKey(memory: Pick<RecentMemory, "projectName" | "name">): string {
-	return `${memory.projectName}\0${memory.name}`;
-}
-
-function isPreviewToggleKey(data: string): boolean {
-	return matchesAnyKey(data, MEMORY_TABLE_KEYS.previewToggle);
-}
-
-function isUpKey(data: string): boolean {
-	return matchesAnyKey(data, MEMORY_TABLE_KEYS.up);
-}
-
-function isDownKey(data: string): boolean {
-	return matchesAnyKey(data, MEMORY_TABLE_KEYS.down);
-}
-
-function isLeftKey(data: string): boolean {
-	return matchesAnyKey(data, MEMORY_TABLE_KEYS.left);
-}
-
-function isRightKey(data: string): boolean {
-	return matchesAnyKey(data, MEMORY_TABLE_KEYS.right);
-}
+const SelectionKeys = {
+	encode(ref: Pick<RecentMemory, "projectName" | "name">): string {
+		return `${ref.projectName}\0${ref.name}`;
+	},
+	decode(key: string): SelectedMemoryRef {
+		const [projectName = "", memoryName = ""] = key.split("\0");
+		return { projectName, memoryName };
+	},
+};
 
 function matchesAnyKey(data: string, keys: readonly KeyId[]): boolean {
 	return keys.some((key) => matchesKey(data, key));
