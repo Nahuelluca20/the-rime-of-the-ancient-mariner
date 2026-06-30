@@ -1,6 +1,6 @@
 ---
 name: save-summary
-description: Use when the user runs /save-summary, asks to save a summary, or is wrapping up work that should be persisted. Classifies the session as implementation, code-exploration, implementation-exploration, code-understanding, or mixed, then calls save_session_summary once with title, description, context, sessionType, and tags.
+description: Use ONLY when the user explicitly asks to save or persist a session summary - e.g. they run /save-summary, say "save a summary", or ask to wrap up the session. Classifies the session as implementation, code-exploration, implementation-exploration, code-understanding, or mixed, then calls save_session_summary once with title, description, context, sessionType, and tags. Do NOT trigger for loading or recalling memories; get_memory / list_memories / insert_memories are read-only and must never trigger a save.
 ---
 
 # Save Adaptive Session Summary
