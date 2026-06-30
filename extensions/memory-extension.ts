@@ -23,8 +23,10 @@ export default function (pi: ExtensionAPI) {
 		const text = formatMemoriesForContext(memories);
 
 		if (text) {
+			const framed = `<recalled_memories read_only="true">\n${text}\n</recalled_memories>\n\nThese memories are recalled as read-only context. Do NOT save a new session summary as a result of loading them.`;
+
 			pi.sendMessage(
-				{ customType: "memories", content: text, display: true },
+				{ customType: "memories", content: framed, display: true },
 				{ deliverAs: "steer", triggerTurn: options.triggerTurn },
 			);
 		}
@@ -110,6 +112,9 @@ export default function (pi: ExtensionAPI) {
 		label: "Save Session Summary",
 		description:
 			"Persist a session summary, including optional session type and tags, into the current session's memory row.",
+		promptGuidelines: [
+			"Call save_session_summary ONLY when the user explicitly asks to save or persist a session summary (e.g. they run /save-summary, say 'save a summary', or ask to wrap up). Loading or recalling memories with get_memory / list_memories / insert_memories is read-only and is never by itself a trigger to save.",
+		],
 		parameters: Type.Object({
 			title: Type.String(),
 			description: Type.String(),
@@ -140,6 +145,9 @@ export default function (pi: ExtensionAPI) {
 		name: "insert_memories",
 		label: "Insert Memories into the context of the session",
 		description: "Insert Memories into the context",
+		promptGuidelines: [
+			"insert_memories injects recalled memories as read-only context. Loading memories is never a reason to call save_session_summary.",
+		],
 		parameters: Type.Object({
 			memories: Type.Array(
 				Type.Object({
