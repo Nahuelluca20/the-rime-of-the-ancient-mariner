@@ -137,15 +137,14 @@ The repo has two distinct execution surfaces:
 ```
 the-rime-of-the-ancient-mariner/
 ├── src/                    # Domain layer (compiled by tsc → dist/)
-│   ├── memory/             # Knowledge store: schema, types, store, previews, session commands
+│   ├── memory/             # Knowledge store: schema, types, store, previews
 │   │   ├── schema.ts       # Drizzle schema (projects, agent_memories tables)
 │   │   ├── types.ts        # Public type re-exports
 │   │   ├── store.ts        # MemoryStore: openMemoryStore() — lazy init + cached
-│   │   ├── preview.ts      # Human-readable preview formatting for memory picker UI
-│   │   ├── session-commands.ts  # saveSession / updateSession logic
-│   │   └── session-summary.ts   # saveSessionSummary logic
+│   │   └── preview.ts      # Human-readable preview formatting for memory picker UI
 │   ├── session/
-│   │   └── info.ts         # getSessionInfo(ctx) — session metadata extraction
+│   │   ├── info.ts         # getSessionInfo(ctx) — session metadata extraction
+│   │   └── memory.ts       # SessionMemory: current-session memory operations
 │   ├── plan-mode/
 │   │   ├── session.ts      # PlanModeSession: openPlanModeSession()
 │   │   ├── prompt.ts       # Template rendering helpers

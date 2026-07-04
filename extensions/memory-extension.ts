@@ -1,4 +1,3 @@
-import { readFile } from "node:fs/promises";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import {
@@ -6,13 +5,13 @@ import {
 	formatMemoriesForContext,
 	resolveMemoryForContext,
 } from "../src/memory/context.ts";
-import { updateSession } from "../src/memory/session-commands.ts";
-import { SESSION_TYPES, saveSessionSummary } from "../src/memory/session-summary.ts";
 import { openMemoryStore } from "../src/memory/store.ts";
+import { SESSION_TYPES, createSessionMemory } from "../src/session/memory.ts";
 import { MemoriesTableDialog } from "../src/ui/memories-table.ts";
 
 const store = openMemoryStore();
 const context = resolveMemoryForContext({ store: store });
+const sessionMemory = createSessionMemory(store);
 
 export default function (pi: ExtensionAPI) {
 	function sendMemoriesToModel(
@@ -33,24 +32,6 @@ export default function (pi: ExtensionAPI) {
 
 		return memories.length;
 	}
-
-	pi.registerTool({
-		name: "count_lines",
-		label: "Count Lines",
-		description: "Count lines in a file using plain TypeScript",
-		parameters: Type.Object({
-			path: Type.String({ description: "File path" }),
-		}),
-		async execute(_toolCallId, params, _signal, _onUpdate, _ctx) {
-			const content = await readFile(params.path, "utf8");
-			const lines = content.split("\n").length;
-
-			return {
-				content: [{ type: "text", text: `${lines} lines in ${params.path}` }],
-				details: { lines, path: params.path },
-			};
-		},
-	});
 
 	pi.registerTool({
 		name: "get_memory",
@@ -125,7 +106,7 @@ export default function (pi: ExtensionAPI) {
 			tags: Type.Optional(Type.Array(Type.String())),
 		}),
 		async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
-			const { message, severity } = saveSessionSummary(ctx, store, params);
+			const { message, severity } = sessionMemory.saveSummary(ctx, params);
 			return {
 				content: [{ type: "text", text: message }],
 				details: { severity, ...params },
@@ -136,7 +117,7 @@ export default function (pi: ExtensionAPI) {
 	pi.registerCommand("update-info", {
 		description: "Update the current session's stored memory in place",
 		handler: async (_args, ctx) => {
-			const { message, severity } = updateSession(ctx, store);
+			const { message, severity } = sessionMemory.updateInfo(ctx);
 			ctx.ui.notify(message, severity);
 		},
 	});

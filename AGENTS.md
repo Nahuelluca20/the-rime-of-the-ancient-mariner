@@ -38,7 +38,8 @@ the-ancient-mariner/
 │   │   ├── types.ts           # Public type re-exports
 │   │   └── store.ts           # MemoryStore: openMemoryStore() + domain ops
 │   ├── session/
-│   │   └── info.ts            # getSessionInfo(ctx) — single source for session metadata
+│   │   ├── info.ts            # getSessionInfo(ctx) — single source for session metadata
+│   │   └── memory.ts          # SessionMemory: current-session memory operations
 │   └── db/
 │       └── connection.ts      # openDb() — internal; only memory/store imports it
 ├── extensions/                # pi extensions (runtime-loaded; not compiled)
@@ -61,7 +62,7 @@ the-ancient-mariner/
 ```
 
 **Rule of thumb:**
-- **`src/`** holds domain logic behind named interfaces (`MemoryStore`, `getSessionInfo`). Compiled by `tsc`. ESM + NodeNext → relative imports in compiled output need `.js` suffixes.
+- **`src/`** holds domain logic behind named interfaces (`MemoryStore`, `SessionMemory`, `getSessionInfo`). Compiled by `tsc`. ESM + NodeNext → relative imports in compiled output need `.js` suffixes.
 - **`extensions/`, `skills/`, `prompts/`, `themes/`** are consumed by pi **at runtime** via paths declared in `package.json["pi"]`. They are **not** built by `tsc`; pi loads `.ts` directly. That's why extensions can `import { openMemoryStore } from "../src/memory/store.ts"` with a `.ts` extension.
 - Extensions should stay thin: register tools/commands/events and delegate to `src/`.
 
