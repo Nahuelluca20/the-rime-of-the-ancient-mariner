@@ -1,6 +1,7 @@
 import { basename } from "node:path";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
-import type { AgentMemoryData, MemoryStore } from "../memory/store.ts";
+import type { MemoryRepository } from "../memory/repository.ts";
+import type { AgentMemoryData } from "../memory/types.ts";
 import { getSessionInfo } from "./info.ts";
 
 export const SESSION_TYPES = [
@@ -78,13 +79,13 @@ function isActionResult(
 /**
  * Binds current-session memory operations to a generic memory store.
  */
-export function createSessionMemory(store: MemoryStore): SessionMemory {
+export function createSessionMemory(repository: MemoryRepository): SessionMemory {
 	return {
 		saveInfo(ctx) {
 			const session = resolveCurrentSessionMemory(ctx);
 			if (isActionResult(session)) return session;
 
-			const { created } = store.createMemory(session.projectName, session.name, session.data);
+			const { created } = repository.createMemory(session.projectName, session.name, session.data);
 			if (!created) {
 				return {
 					message: `A memory named "${session.name}" already exists in project "${session.projectName}". Use /update-info to overwrite it.`,
@@ -101,7 +102,7 @@ export function createSessionMemory(store: MemoryStore): SessionMemory {
 			const session = resolveCurrentSessionMemory(ctx);
 			if (isActionResult(session)) return session;
 
-			const { updated } = store.updateMemory(session.projectName, session.name, session.data);
+			const { updated } = repository.updateMemory(session.projectName, session.name, session.data);
 			if (!updated) {
 				return {
 					message: `No memory named "${session.name}" exists in project "${session.projectName}". Use /save-info first.`,
@@ -118,9 +119,9 @@ export function createSessionMemory(store: MemoryStore): SessionMemory {
 			const session = resolveCurrentSessionMemory(ctx);
 			if (isActionResult(session)) return session;
 
-			const existing = store.getMemory(session.projectName, session.name);
+			const existing = repository.findMemory(session.projectName, session.name);
 			if (existing) {
-				store.updateMemory(session.projectName, session.name, {
+				repository.updateMemory(session.projectName, session.name, {
 					...existing.data,
 					...summary,
 				});
@@ -130,7 +131,7 @@ export function createSessionMemory(store: MemoryStore): SessionMemory {
 				};
 			}
 
-			store.createMemory(session.projectName, session.name, {
+			repository.createMemory(session.projectName, session.name, {
 				...session.data,
 				...summary,
 			});

@@ -1,22 +1,24 @@
 import { describe, expect, test } from "bun:test";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import type {
-	AgentMemory,
-	AgentMemoryData,
 	CreateMemoryResult,
 	MemoryRef,
-	MemoryStore,
-	Project,
-	RecentMemory,
+	MemoryRepository,
+	RecentMemoryRow,
 	UpdateMemoryResult,
-} from "../../src/memory/store.ts";
+} from "../../src/memory/repository.ts";
+import type { AgentMemory, AgentMemoryData, Project } from "../../src/memory/types.ts";
 import { createSessionMemory } from "../../src/session/memory.ts";
 
-class FakeMemoryStore implements MemoryStore {
+class FakeMemoryRepository implements MemoryRepository {
 	readonly memories = new Map<string, AgentMemory>();
 	private nextId = 1;
 
-	getOrCreateProject(name: string): Project {
+	findProject(name: string): Project | null {
+		return { id: 1, name, createdAt: new Date(0) };
+	}
+
+	ensureProject(name: string): Project {
 		return { id: 1, name, createdAt: new Date(0) };
 	}
 
@@ -40,13 +42,13 @@ class FakeMemoryStore implements MemoryStore {
 		return { memory: updated, updated: true };
 	}
 
-	getMemory(projectName: string, name: string): AgentMemory | null {
+	findMemory(projectName: string, name: string): AgentMemory | null {
 		return this.memories.get(this.key(projectName, name)) ?? null;
 	}
 
-	getMemories(refs: MemoryRef[]): AgentMemory[] {
+	findMemories(refs: MemoryRef[]): AgentMemory[] {
 		return refs
-			.map((ref) => this.getMemory(ref.projectName, ref.name))
+			.map((ref) => this.findMemory(ref.projectName, ref.name))
 			.filter((memory): memory is AgentMemory => memory !== null);
 	}
 
@@ -57,7 +59,7 @@ class FakeMemoryStore implements MemoryStore {
 			.map(([, memory]) => memory);
 	}
 
-	listRecentMemories(): RecentMemory[] {
+	listRecentMemoryRows(): RecentMemoryRow[] {
 		return [];
 	}
 
@@ -99,8 +101,8 @@ function context(
 
 describe("createSessionMemory", () => {
 	test("returns a warning when the current session is unnamed", () => {
-		const store = new FakeMemoryStore();
-		const sessionMemory = createSessionMemory(store);
+		const repository = new FakeMemoryRepository();
+		const sessionMemory = createSessionMemory(repository);
 
 		const result = sessionMemory.saveSummary(context({ sessionName: null }), {
 			title: "T",
@@ -110,25 +112,25 @@ describe("createSessionMemory", () => {
 
 		expect(result.severity).toBe("warning");
 		expect(result.message).toContain("This session has no name");
-		expect(store.countMemories()).toBe(0);
+		expect(repository.countMemories()).toBe(0);
 	});
 
 	test("updates metadata for an existing current-session memory", () => {
-		const store = new FakeMemoryStore();
-		store.createMemory("the-ancient-mariner", "daily-work", { old: true });
-		const sessionMemory = createSessionMemory(store);
+		const repository = new FakeMemoryRepository();
+		repository.createMemory("the-ancient-mariner", "daily-work", { old: true });
+		const sessionMemory = createSessionMemory(repository);
 
 		const result = sessionMemory.updateInfo(context({ sessionId: "session-2" }));
 
 		expect(result.severity).toBe("info");
-		expect(store.getMemory("the-ancient-mariner", "daily-work")?.data).toEqual({
+		expect(repository.findMemory("the-ancient-mariner", "daily-work")?.data).toEqual({
 			cwd: "/work/the-ancient-mariner",
 			sessionId: "session-2",
 		});
 	});
 
 	test("warns when updating a missing current-session memory", () => {
-		const sessionMemory = createSessionMemory(new FakeMemoryStore());
+		const sessionMemory = createSessionMemory(new FakeMemoryRepository());
 
 		const result = sessionMemory.updateInfo(context());
 
@@ -137,8 +139,8 @@ describe("createSessionMemory", () => {
 	});
 
 	test("creates summaries under the project name derived from cwd", () => {
-		const store = new FakeMemoryStore();
-		const sessionMemory = createSessionMemory(store);
+		const repository = new FakeMemoryRepository();
+		const sessionMemory = createSessionMemory(repository);
 
 		const result = sessionMemory.saveSummary(context({ cwd: "/Users/me/project-a" }), {
 			title: "Refactor",
@@ -149,7 +151,7 @@ describe("createSessionMemory", () => {
 		});
 
 		expect(result.severity).toBe("info");
-		expect(store.getMemory("project-a", "daily-work")?.data).toEqual({
+		expect(repository.findMemory("project-a", "daily-work")?.data).toEqual({
 			cwd: "/Users/me/project-a",
 			sessionId: "session-1",
 			title: "Refactor",
@@ -161,14 +163,14 @@ describe("createSessionMemory", () => {
 	});
 
 	test("merges summaries into existing current-session memory data", () => {
-		const store = new FakeMemoryStore();
-		store.createMemory("the-ancient-mariner", "daily-work", {
+		const repository = new FakeMemoryRepository();
+		repository.createMemory("the-ancient-mariner", "daily-work", {
 			cwd: "/old/cwd",
 			sessionId: "old-session",
 			title: "Old",
 			extra: "preserved",
 		});
-		const sessionMemory = createSessionMemory(store);
+		const sessionMemory = createSessionMemory(repository);
 
 		const result = sessionMemory.saveSummary(context(), {
 			title: "New",
@@ -177,7 +179,7 @@ describe("createSessionMemory", () => {
 		});
 
 		expect(result.severity).toBe("info");
-		expect(store.getMemory("the-ancient-mariner", "daily-work")?.data).toEqual({
+		expect(repository.findMemory("the-ancient-mariner", "daily-work")?.data).toEqual({
 			cwd: "/old/cwd",
 			sessionId: "old-session",
 			title: "New",

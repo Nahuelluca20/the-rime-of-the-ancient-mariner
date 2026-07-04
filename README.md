@@ -137,10 +137,11 @@ The repo has two distinct execution surfaces:
 ```
 the-rime-of-the-ancient-mariner/
 ├── src/                    # Domain layer (compiled by tsc → dist/)
-│   ├── memory/             # Knowledge store: schema, types, store, previews
+│   ├── memory/             # Knowledge store: schema, repository, catalog, previews
 │   │   ├── schema.ts       # Drizzle schema (projects, agent_memories tables)
 │   │   ├── types.ts        # Public type re-exports
-│   │   ├── store.ts        # MemoryStore: openMemoryStore() — lazy init + cached
+│   │   ├── repository.ts   # MemoryRepository: persistence-only table access
+│   │   ├── catalog.ts      # MemoryCatalog: recent-memory browsing projections
 │   │   └── preview.ts      # Human-readable preview formatting for memory picker UI
 │   ├── session/
 │   │   ├── info.ts         # getSessionInfo(ctx) — session metadata extraction
@@ -183,21 +184,21 @@ Data is stored in a global SQLite database (default: `~/.pi/agent/the-ancient-ma
 | `projects` | `id`, `name` (unique), `created_at` | One row per project directory |
 | `agent_memories` | `id`, `name`, `project_id` (FK → projects), `created_at`, `updated_at`, `data` (JSON) | Memories are unique per (project, name); cascade-deletes with project |
 
-### Store API
+### Memory APIs
 
 ```ts
-const store = openMemoryStore(); // Auto-opens DB, runs migrations
+const repository = openMemoryRepository(); // Auto-opens DB, runs migrations
+const catalog = createMemoryCatalog(repository);
 
-store.getOrCreateProject("my-project");
-store.createMemory("my-project", "session-001", { summary: "..." });
-store.updateMemory("my-project", "session-001", { summary: "updated" });
-store.getMemory("my-project", "session-001");
-store.listMemories("my-project");
-store.listRecentMemories(5, 0); // newest first, paged, includes session type + preview text
-store.countMemories();
+repository.createMemory("my-project", "session-001", { summary: "..." });
+repository.updateMemory("my-project", "session-001", { summary: "updated" });
+repository.findMemory("my-project", "session-001");
+repository.listMemories("my-project");
+catalog.listRecentMemories(5, 0); // newest first, paged, includes session type + preview text
+repository.countMemories();
 ```
 
-The store is lazy-initialized and cached at module level — first call opens SQLite and runs migrations; subsequent calls return the cached instance.
+Reads do not create project rows; writes create project rows only when needed through `ensureProject()` inside the repository.
 
 ## Development
 
@@ -243,7 +244,7 @@ pi --extension .pi/extensions/index.ts
 1. Edit `src/memory/schema.ts`
 2. Run `bun run db:generate`
 3. Commit the new migration file alongside the schema change
-4. The DB auto-migrates on next `openMemoryStore()` call
+4. The DB auto-migrates on next `openMemoryRepository()` call
 
 ## Tech Stack
 

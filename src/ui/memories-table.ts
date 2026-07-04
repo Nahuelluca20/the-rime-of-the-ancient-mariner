@@ -10,7 +10,7 @@ import {
 	truncateToWidth,
 	visibleWidth,
 } from "@earendil-works/pi-tui";
-import type { RecentMemory } from "../memory/store.ts";
+import type { RecentMemory } from "../memory/catalog.ts";
 
 export interface SelectedMemoryRef {
 	projectName: string;

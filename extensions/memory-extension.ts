@@ -1,17 +1,19 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
+import { createMemoryCatalog } from "../src/memory/catalog.ts";
 import {
 	type MemoryInfoForRetrieval,
 	formatMemoriesForContext,
 	resolveMemoryForContext,
 } from "../src/memory/context.ts";
-import { openMemoryStore } from "../src/memory/store.ts";
+import { openMemoryRepository } from "../src/memory/repository.ts";
 import { SESSION_TYPES, createSessionMemory } from "../src/session/memory.ts";
 import { MemoriesTableDialog } from "../src/ui/memories-table.ts";
 
-const store = openMemoryStore();
-const context = resolveMemoryForContext({ store: store });
-const sessionMemory = createSessionMemory(store);
+const repository = openMemoryRepository();
+const catalog = createMemoryCatalog(repository);
+const context = resolveMemoryForContext({ repository });
+const sessionMemory = createSessionMemory(repository);
 
 export default function (pi: ExtensionAPI) {
 	function sendMemoriesToModel(
@@ -42,7 +44,7 @@ export default function (pi: ExtensionAPI) {
 			memoryName: Type.String({ description: "Memory name" }),
 		}),
 		async execute(_toolCallId, params, _signal, _onUpdate, _ctx) {
-			const memory = store.getMemory(params.projectName, params.memoryName);
+			const memory = repository.findMemory(params.projectName, params.memoryName);
 			if (!memory) {
 				return {
 					content: [
@@ -69,7 +71,7 @@ export default function (pi: ExtensionAPI) {
 			projectName: Type.String({ description: "Project name" }),
 		}),
 		async execute(_toolCallId, params, _signal, _onUpdate, _ctx) {
-			const memories = store.listMemories(params.projectName);
+			const memories = repository.listMemories(params.projectName);
 			const names = memories.map(
 				(m) => `- ${m.name} (updated: ${m.updatedAt?.toISOString() ?? "unknown"})`,
 			);
@@ -152,8 +154,8 @@ export default function (pi: ExtensionAPI) {
 		handler: async (_args, ctx) => {
 			const pageSize = 5;
 			const loadPage = (pageIndex: number) =>
-				store.listRecentMemories(pageSize, pageIndex * pageSize);
-			const totalRows = store.countMemories();
+				catalog.listRecentMemories(pageSize, pageIndex * pageSize);
+			const totalRows = repository.countMemories();
 			const rows = loadPage(0);
 
 			const selected = await ctx.ui.custom<MemoryInfoForRetrieval[] | null>(
