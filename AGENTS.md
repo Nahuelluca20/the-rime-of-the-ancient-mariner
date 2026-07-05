@@ -36,11 +36,13 @@ the-ancient-mariner/
 │   ├── memory/
 │   │   ├── schema.ts          # Drizzle schema (internal)
 │   │   ├── types.ts           # Public type re-exports
-│   │   └── store.ts           # MemoryStore: openMemoryStore() + domain ops
+│   │   ├── repository.ts      # MemoryRepository: persistence-only table access
+│   │   └── catalog.ts         # MemoryCatalog: recent-memory browsing projections
 │   ├── session/
-│   │   └── info.ts            # getSessionInfo(ctx) — single source for session metadata
+│   │   ├── info.ts            # getSessionInfo(ctx) — single source for session metadata
+│   │   └── memory.ts          # SessionMemory: current-session memory operations
 │   └── db/
-│       └── connection.ts      # openDb() — internal; only memory/store imports it
+│       └── connection.ts      # openDb() — internal; only memory/repository imports it
 ├── extensions/                # pi extensions (runtime-loaded; not compiled)
 │   ├── lifecycle.ts           # session_start + optional local resources_discover
 │   ├── memory-extension.ts        # tools backed by src/memory
@@ -61,8 +63,8 @@ the-ancient-mariner/
 ```
 
 **Rule of thumb:**
-- **`src/`** holds domain logic behind named interfaces (`MemoryStore`, `getSessionInfo`). Compiled by `tsc`. ESM + NodeNext → relative imports in compiled output need `.js` suffixes.
-- **`extensions/`, `skills/`, `prompts/`, `themes/`** are consumed by pi **at runtime** via paths declared in `package.json["pi"]`. They are **not** built by `tsc`; pi loads `.ts` directly. That's why extensions can `import { openMemoryStore } from "../src/memory/store.ts"` with a `.ts` extension.
+- **`src/`** holds domain logic behind named interfaces (`MemoryRepository`, `MemoryCatalog`, `SessionMemory`, `getSessionInfo`). Compiled by `tsc`. ESM + NodeNext → relative imports in compiled output need `.js` suffixes.
+- **`extensions/`, `skills/`, `prompts/`, `themes/`** are consumed by pi **at runtime** via paths declared in `package.json["pi"]`. They are **not** built by `tsc`; pi loads `.ts` directly. That's why extensions can import `../src/**/*.ts` files directly.
 - Extensions should stay thin: register tools/commands/events and delegate to `src/`.
 
 ---
@@ -98,7 +100,7 @@ async function countLines(path: string): Promise<number> {
 }
 ```
 
-For shared resources (DB connection, store handles), initialize lazily at first use and cache at module level. See `src/memory/store.ts` for the pattern.
+For shared resources (DB connection, repository handles), initialize lazily at first use and cache at module level.
 
 ### 4.3 TypeBox Schemas (Extensions)
 
@@ -156,8 +158,9 @@ Canonical examples in this repo:
 
 - **`src/memory/schema.ts`** — Drizzle schema (internal). Tables: `projects` (unique `name`) and `agent_memories` (JSON `data`, FK to `projects`, cascade delete). Exports `AgentMemoryData` and inferred row types.
 - **`src/memory/types.ts`** — public type re-exports. Consumers import from here, not from `schema.ts`.
-- **`src/memory/store.ts`** — `openMemoryStore(path?)` returns a `MemoryStore` with domain operations (`getOrCreateProject`, `putMemory`). Lazy + cached: first call opens sqlite and runs migrations; subsequent calls return the cached instance.
-- **`src/db/connection.ts`** — `openDb(path)` opens better-sqlite3, wraps in Drizzle, runs migrations. Internal; only `memory/store.ts` imports it. Extensions never touch Drizzle directly.
+- **`src/memory/repository.ts`** — `MemoryRepository` owns persistence-only operations. Reads use `findProject()` and never create rows; writes use `ensureProject()` when a parent project row is needed.
+- **`src/memory/catalog.ts`** — `MemoryCatalog` owns browsing projections such as recent-memory previews.
+- **`src/db/connection.ts`** — `openDb(path)` opens better-sqlite3, wraps in Drizzle, runs migrations. Internal; only `memory/repository.ts` imports it. Extensions never touch Drizzle directly.
 
 Schema change workflow:
 1. Edit `src/memory/schema.ts`

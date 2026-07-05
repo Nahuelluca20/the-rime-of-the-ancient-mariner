@@ -1,4 +1,5 @@
-import type { AgentMemory, MemoryStore } from "./store.ts";
+import type { MemoryRepository } from "./repository.ts";
+import type { AgentMemory } from "./types.ts";
 
 export type MemoryInfoForRetrieval = {
 	memoryName: string;
@@ -10,12 +11,12 @@ export interface MemoryContext {
 }
 
 export function resolveMemoryForContext({
-	store,
+	repository,
 }: {
-	store: MemoryStore;
+	repository: MemoryRepository;
 }): MemoryContext {
 	function getMemories(memoryInfo: MemoryInfoForRetrieval[]): AgentMemory[] {
-		return store.getMemories(
+		return repository.findMemories(
 			memoryInfo.map(({ projectName, memoryName }) => ({ projectName, name: memoryName })),
 		);
 	}
