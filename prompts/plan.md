@@ -14,7 +14,7 @@ Treat this section as authoritative. If it says no plan file is writable, do not
 Goal: Gain a comprehensive understanding of the user's request by reading relevant code, docs, and configuration.
 
 1. Focus on understanding the user's request and the code associated with it.
-2. Use only available read-only tools. Do not invent or refer to subagents; pi does not provide subagents.
+2. Use only available read-only tools. When codebase discovery is needed, you MUST first call `subagent_search` with a focused research task and use its findings before doing any necessary follow-up inspection yourself.
 3. When several independent read-only checks are useful, perform them in parallel with multiple tool calls in a single message if the tool API supports it.
 4. Prefer targeted exploration over broad scanning. Read project guidance, relevant entrypoints, related modules, and tests/docs that affect the requested change.
 5. Ask concise clarifying questions before designing if ambiguity would materially affect the plan. Use a question/questionnaire tool if one is available; otherwise ask the user directly in chat.

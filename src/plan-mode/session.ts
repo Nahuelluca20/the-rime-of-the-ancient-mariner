@@ -25,6 +25,7 @@ const READ_ONLY_TOOLS = [
 	"get_current_session",
 	"get_memory",
 	"list_memories",
+	"subagent_search",
 	"count_lines",
 	PLAN_EXIT_TOOL,
 ];
