@@ -24,12 +24,12 @@ export interface SubagentSearchDetails {
 }
 
 export interface SubagentLibraryOptions {
-	skillPath: string;
+	promptTemplatePath: string;
 	exec(command: string, args: string[], options?: ExecOptions): Promise<ExecResult>;
 }
 
 /**
- * Runs the package's read-only codebase-search skill in an isolated Pi process.
+ * Runs the package's read-only codebase-search prompt in an isolated Pi process.
  *
  * The facade owns child-process isolation, Pi command arguments, output limits,
  * and execution diagnostics so extensions only provide the delegated task and cwd.
@@ -57,7 +57,7 @@ function formatOutput(stdout: string): { text: string; truncated: boolean } {
 }
 
 export function createSubagentLibrary({
-	skillPath,
+	promptTemplatePath,
 	exec,
 }: SubagentLibraryOptions): SubagentLibrary {
 	return {
@@ -67,11 +67,12 @@ export function createSubagentLibrary({
 				"--no-session",
 				"--no-extensions",
 				"--no-skills",
-				"--skill",
-				skillPath,
+				"--no-prompt-templates",
+				"--prompt-template",
+				promptTemplatePath,
 				"--tools",
 				"read,grep,find,ls",
-				`Use the loaded subagent-codebase-search skill. Research this task:\n\n${task.trim()}`,
+				`/subagent-codebase-search ${task.trim()}`,
 			];
 			const result = await exec("pi", args, { cwd, signal });
 

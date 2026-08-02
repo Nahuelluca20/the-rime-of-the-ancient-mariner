@@ -10,7 +10,7 @@ interface Invocation {
 
 function createLibrary(result: ExecResult, invocations: Invocation[]) {
 	return createSubagentLibrary({
-		skillPath: "/package/skills/subagent-codebase-search.md",
+		promptTemplatePath: "/package/prompts/subagent-codebase-search.md",
 		exec: async (command, args, options) => {
 			invocations.push({ command, args, options });
 			return result;
@@ -50,11 +50,12 @@ describe("createSubagentLibrary", () => {
 					"--no-session",
 					"--no-extensions",
 					"--no-skills",
-					"--skill",
-					"/package/skills/subagent-codebase-search.md",
+					"--no-prompt-templates",
+					"--prompt-template",
+					"/package/prompts/subagent-codebase-search.md",
 					"--tools",
 					"read,grep,find,ls",
-					"Use the loaded subagent-codebase-search skill. Research this task:\n\nFind the application entrypoint",
+					"/subagent-codebase-search Find the application entrypoint",
 				],
 				options: { cwd: "/projects/example", signal },
 			},

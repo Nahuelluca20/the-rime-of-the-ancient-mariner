@@ -7,7 +7,7 @@ import { createSubagentLibrary } from "../src/subagents/search.ts";
 export default function subAgentsExtension(pi: ExtensionAPI) {
 	const baseDir = dirname(fileURLToPath(import.meta.url));
 	const subagents = createSubagentLibrary({
-		skillPath: join(baseDir, "..", "skills", "subagent-codebase-search.md"),
+		promptTemplatePath: join(baseDir, "..", "prompts", "subagent-codebase-search.md"),
 		exec: pi.exec,
 	});
 
