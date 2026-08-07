@@ -20,11 +20,13 @@ import lifeCycleExtension from "../../extensions/lifecycle.ts";
 import memoryExtension from "../../extensions/memory-extension.ts";
 import sessionExtension from "../../extensions/session-extension.ts";
 import planModeExtension from "../../extensions/plan-mode.ts";
+import subAgentsExtension from "../../extensions/sub-agents-extension.ts";
 
 export default function (pi: ExtensionAPI) {
 	sessionExtension(pi);
 	memoryExtension(pi);
 	lifeCycleExtension(pi, { discoverResources: true });
+	subAgentsExtension(pi);
 	planModeExtension(pi);
 }
 ```

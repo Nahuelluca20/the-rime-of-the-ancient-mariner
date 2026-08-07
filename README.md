@@ -16,9 +16,10 @@
 | **Session Tracking** | Save and update session metadata with `update-info` command |
 | **Typed Session Summaries** | Distill a session into `{title, description, context, sessionType, tags}` and merge into persistent memory |
 | **Recent Memory Picker** | Browse newest memories with visible session-type badges, preview contents with `Tab`, and insert selected memories into the LLM context |
-| **Plan Mode** | Native read-only planning mode that blocks write tools and unsafe bash commands until user approval |
+| **Plan Mode** | Collaborative read-only planning through System Architecture, Program Design, and reviewable Vertical Slices |
+| **Subagents** | Discover prompt-based subagents and run them in isolated pi processes |
 | **Session Info** | Inspect session metadata (ID, file, name, CWD, entry count, leaf) |
-| **Prompts & Skills** | Planning, exploration, understanding, and typed summary prompts; `save-summary` skill |
+| **Prompts & Skills** | Planning, isolated codebase research, exploration, understanding, and typed summary prompts; `save-summary` skill |
 
 ## Installation
 
@@ -49,6 +50,10 @@ Once installed, pi loads all extensions, skills, and prompts automatically. The 
 | `insert_memories` | Insert selected memories into the current LLM context | `memories: { projectName, memoryName }[]` |
 | `get_current_session` | Return current pi session metadata | _(none)_ |
 | `count_lines` | Count lines in a file | `path: string` |
+| `list_available_subagents` | List loaded `subagent-*` prompt templates and their authoritative paths | _(none)_ |
+| `subagent_execute` | Run a discovered prompt in an isolated pi process with full coding tools | `promptPath: string`, `task: string` |
+
+`subagent_execute` accepts only paths returned by `list_available_subagents`. Its child process has the full built-in coding tool set (`read`, `bash`, `edit`, `write`, `grep`, `find`, and `ls`), so selected prompts can modify files and execute shell commands. It is intentionally unavailable while native plan mode is active. Cancelling the parent tool terminates the child process; failed children report their exit code and prefer `stderr` diagnostics, falling back to `stdout` when needed.
 
 Supported `sessionType` values are `implementation`, `code-exploration`, `implementation-exploration`, `code-understanding`, and `mixed`.
 
@@ -91,7 +96,7 @@ Submitted memories are formatted with the same context renderer used by the `ins
 
 ### Plan Mode
 
-Plan mode is a native read-only mode that blocks all filesystem writes, code edits, config changes, and unsafe bash commands. The agent can only use read-only tools (`read`, `grep`, `find`, `ls`, safe `bash` commands, etc.) and must call `plan_exit` to request user approval before leaving.
+Plan mode is a native read-only mode that blocks all filesystem writes, code edits, config changes, and unsafe bash commands. Its prompt guides the human and agent through System Architecture, Program Design, and end-to-end Vertical Slices, with explicit alignment checkpoints between phases. The final plan requires implementation to stop after every slice for human review. The agent can only use read-only tools (`read`, `grep`, `find`, `ls`, safe `bash` commands, etc.) and must call `plan_exit` to request user approval before leaving.
 
 The extension registers `Shift+Tab` as a shortcut for toggling plan mode. In default pi, `Shift+Tab` is already bound to `app.thinking.cycle`, so users who want the plan-mode shortcut must remap that built-in action in `~/.pi/agent/keybindings.json` to avoid a collision:
 
@@ -124,7 +129,8 @@ After editing the file, run `/reload` in pi. With the example above, `Shift+Tab`
 
 | Prompt | Description |
 |--------|-------------|
-| `plan.md` | Structured plan-mode workflow template (Phase 1-5: Understand → Design → Review → Final Plan → Exit) |
+| `plan.md` | Collaborative planning through System Architecture, Program Design, and reviewable Vertical Slices |
+| `subagent-codebase-search.md` | Isolated read-only research handoff with optional architecture, program-design, and focused code excerpts |
 | `explore-codebase.md` | Read-only `code-exploration` workflow for codebase orientation |
 | `explore-implementation.md` | Read-only `implementation-exploration` workflow for comparing approaches before coding |
 | `understand-code.md` | Read-only `code-understanding` workflow for explaining existing modules, flows, APIs, or behavior |
@@ -150,6 +156,8 @@ the-rime-of-the-ancient-mariner/
 │   │   ├── session.ts      # PlanModeSession: openPlanModeSession()
 │   │   ├── prompt.ts       # Template rendering helpers
 │   │   └── bash-safety.ts  # Read-only bash command validation
+│   ├── subagents/
+│   │   └── subagents-orchestrator.ts # Prompt discovery and full-tool subagent execution
 │   ├── ui/
 │   │   └── memories-table.ts # Recent memory picker dialog
 │   └── db/
@@ -158,11 +166,13 @@ the-rime-of-the-ancient-mariner/
 │   ├── lifecycle.ts        # session_start + resources_discover events
 │   ├── memory-extension.ts # Memory tools + update-info command
 │   ├── session-extension.ts# Session info tool + command
+│   ├── sub-agents-extension.ts # Subagent discovery and execution tools
 │   └── plan-mode.ts        # Plan mode tool, command, flag, and hooks
 ├── skills/                 # pi skills (Markdown)
 │   └── save-summary.md
 ├── prompts/                # pi prompt templates (Markdown)
 │   ├── plan.md
+│   ├── subagent-codebase-search.md
 │   ├── explore-codebase.md
 │   ├── explore-implementation.md
 │   ├── understand-code.md
@@ -220,15 +230,17 @@ Create `.pi/extensions/index.ts` (gitignored) as a dev harness:
 
 ```ts
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import lifeCycleExtension from "../extensions/lifecycle.ts";
-import memoryExtension from "../extensions/memory-extension.ts";
-import sessionExtension from "../extensions/session-extension.ts";
-import planModeExtension from "../extensions/plan-mode.ts";
+import lifeCycleExtension from "../../extensions/lifecycle.ts";
+import memoryExtension from "../../extensions/memory-extension.ts";
+import sessionExtension from "../../extensions/session-extension.ts";
+import planModeExtension from "../../extensions/plan-mode.ts";
+import subAgentsExtension from "../../extensions/sub-agents-extension.ts";
 
 export default function (pi: ExtensionAPI) {
 	sessionExtension(pi);
 	memoryExtension(pi);
-	lifeCycleExtension(pi);
+	lifeCycleExtension(pi, { discoverResources: true });
+	subAgentsExtension(pi);
 	planModeExtension(pi);
 }
 ```
