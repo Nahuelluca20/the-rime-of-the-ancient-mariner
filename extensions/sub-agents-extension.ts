@@ -36,25 +36,35 @@ export default function subAgentsExtension(pi: ExtensionAPI) {
 	pi.registerTool({
 		name: "list_available_subagents",
 		label: "List Available Subagents",
-		description: "List the available subagent in the repo/project/global for use it.",
-		parameters: {},
-		async execute(_toolCallId, params, signal, _onUpdate, ctx) {
+		description: "List the available project, package, and global subagent prompts.",
+		parameters: Type.Object({}),
+		async execute() {
 			return subAgentsOrchestrator.list();
 		},
 	});
 
-	// pi.registerTool({
-	// 	name: "subagent_execute",
-	// 	label: "Subagent Execute",
-	// 	parameters: Type.Object({
-	// 		subAgentInstruction: Type.String({
-	// 			description: "The task/instruction/info for the subagent prompt",
-	// 			minLength: 10,
-	// 		}),
-	//
-	// 	}),
-	// 	async execute(_toolCallId, params, signal, onUpdate, ctx) {
-	// 		return null;
-	// 	},
-	// });
+	pi.registerTool({
+		name: "subagent_execute",
+		label: "Subagent Execute",
+		description:
+			"Run a discovered subagent prompt in an isolated Pi process with full coding tools. The subagent can edit files and execute shell commands.",
+		parameters: Type.Object({
+			promptPath: Type.String({
+				description: "Exact prompt path returned by list_available_subagents",
+				minLength: 1,
+			}),
+			task: Type.String({
+				description: "Task to delegate to the subagent",
+				minLength: 1,
+			}),
+		}),
+		async execute(_toolCallId, params, signal, _onUpdate, ctx) {
+			return subAgentsOrchestrator.run({
+				promptPath: params.promptPath,
+				task: params.task,
+				cwd: ctx.cwd,
+				signal,
+			});
+		},
+	});
 }

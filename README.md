@@ -17,6 +17,7 @@
 | **Typed Session Summaries** | Distill a session into `{title, description, context, sessionType, tags}` and merge into persistent memory |
 | **Recent Memory Picker** | Browse newest memories with visible session-type badges, preview contents with `Tab`, and insert selected memories into the LLM context |
 | **Plan Mode** | Collaborative read-only planning through System Architecture, Program Design, and reviewable Vertical Slices |
+| **Subagents** | Discover prompt-based subagents and run them in isolated pi processes |
 | **Subagent Search** | Delegate focused, read-only codebase research to an isolated pi process |
 | **Session Info** | Inspect session metadata (ID, file, name, CWD, entry count, leaf) |
 | **Prompts & Skills** | Planning, isolated codebase research, exploration, understanding, and typed summary prompts; `save-summary` skill |
@@ -50,7 +51,11 @@ Once installed, pi loads all extensions, skills, and prompts automatically. The 
 | `insert_memories` | Insert selected memories into the current LLM context | `memories: { projectName, memoryName }[]` |
 | `get_current_session` | Return current pi session metadata | _(none)_ |
 | `count_lines` | Count lines in a file | `path: string` |
+| `list_available_subagents` | List loaded `subagent-*` prompt templates and their authoritative paths | _(none)_ |
+| `subagent_execute` | Run a discovered prompt in an isolated pi process with full coding tools | `promptPath: string`, `task: string` |
 | `subagent_search` | Run focused codebase research in an isolated, read-only pi process | `task: string` |
+
+`subagent_execute` accepts only paths returned by `list_available_subagents`. Its child process has the full built-in coding tool set (`read`, `bash`, `edit`, `write`, `grep`, `find`, and `ls`), so selected prompts can modify files and execute shell commands. Unlike `subagent_search`, it is intentionally unavailable while native plan mode is active. Cancelling the parent tool terminates the child process; failed children report their exit code and prefer `stderr` diagnostics, falling back to `stdout` when needed.
 
 Supported `sessionType` values are `implementation`, `code-exploration`, `implementation-exploration`, `code-understanding`, and `mixed`.
 
@@ -154,7 +159,8 @@ the-rime-of-the-ancient-mariner/
 │   │   ├── prompt.ts       # Template rendering helpers
 │   │   └── bash-safety.ts  # Read-only bash command validation
 │   ├── subagents/
-│   │   └── search.ts       # Isolated read-only pi process orchestration
+│   │   ├── search.ts       # Isolated read-only pi process orchestration
+│   │   └── subagents-orchestrator.ts # Prompt discovery and full-tool subagent execution
 │   ├── ui/
 │   │   └── memories-table.ts # Recent memory picker dialog
 │   └── db/
@@ -163,7 +169,7 @@ the-rime-of-the-ancient-mariner/
 │   ├── lifecycle.ts        # session_start + resources_discover events
 │   ├── memory-extension.ts # Memory tools + update-info command
 │   ├── session-extension.ts# Session info tool + command
-│   ├── sub-agents-extension.ts # subagent_search tool registration
+│   ├── sub-agents-extension.ts # Subagent discovery, execution, and search tools
 │   └── plan-mode.ts        # Plan mode tool, command, flag, and hooks
 ├── skills/                 # pi skills (Markdown)
 │   └── save-summary.md
