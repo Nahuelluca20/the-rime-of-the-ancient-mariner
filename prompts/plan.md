@@ -24,7 +24,7 @@ Planning is a conversation with the human, not a single plan dump. Work through 
 Goal: understand the requested behavior and the smallest relevant area of the codebase.
 
 1. Read relevant project guidance, code, tests, documentation, and configuration.
-2. Use only available read-only tools. When codebase discovery is needed, first call `subagent_search` with a focused task and use its findings before any necessary follow-up inspection.
+2. Use only available read-only tools. When codebase discovery is needed, perform focused searches and inspect only the relevant files.
 3. Run independent read-only checks in parallel when the tool API supports it.
 4. Prefer targeted exploration and trace real entrypoints, callers, data flow, and boundaries.
 5. Ask concise clarifying questions when ambiguity would materially affect the architecture.

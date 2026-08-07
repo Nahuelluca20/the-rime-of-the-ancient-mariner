@@ -18,7 +18,6 @@
 | **Recent Memory Picker** | Browse newest memories with visible session-type badges, preview contents with `Tab`, and insert selected memories into the LLM context |
 | **Plan Mode** | Collaborative read-only planning through System Architecture, Program Design, and reviewable Vertical Slices |
 | **Subagents** | Discover prompt-based subagents and run them in isolated pi processes |
-| **Subagent Search** | Delegate focused, read-only codebase research to an isolated pi process |
 | **Session Info** | Inspect session metadata (ID, file, name, CWD, entry count, leaf) |
 | **Prompts & Skills** | Planning, isolated codebase research, exploration, understanding, and typed summary prompts; `save-summary` skill |
 
@@ -53,9 +52,8 @@ Once installed, pi loads all extensions, skills, and prompts automatically. The 
 | `count_lines` | Count lines in a file | `path: string` |
 | `list_available_subagents` | List loaded `subagent-*` prompt templates and their authoritative paths | _(none)_ |
 | `subagent_execute` | Run a discovered prompt in an isolated pi process with full coding tools | `promptPath: string`, `task: string` |
-| `subagent_search` | Run focused codebase research in an isolated, read-only pi process | `task: string` |
 
-`subagent_execute` accepts only paths returned by `list_available_subagents`. Its child process has the full built-in coding tool set (`read`, `bash`, `edit`, `write`, `grep`, `find`, and `ls`), so selected prompts can modify files and execute shell commands. Unlike `subagent_search`, it is intentionally unavailable while native plan mode is active. Cancelling the parent tool terminates the child process; failed children report their exit code and prefer `stderr` diagnostics, falling back to `stdout` when needed.
+`subagent_execute` accepts only paths returned by `list_available_subagents`. Its child process has the full built-in coding tool set (`read`, `bash`, `edit`, `write`, `grep`, `find`, and `ls`), so selected prompts can modify files and execute shell commands. It is intentionally unavailable while native plan mode is active. Cancelling the parent tool terminates the child process; failed children report their exit code and prefer `stderr` diagnostics, falling back to `stdout` when needed.
 
 Supported `sessionType` values are `implementation`, `code-exploration`, `implementation-exploration`, `code-understanding`, and `mixed`.
 
@@ -118,7 +116,7 @@ After editing the file, run `/reload` in pi. With the example above, `Shift+Tab`
 - Package managers, editors, system control commands
 
 **Allowed operations in plan mode:**
-- `read`, `grep`, `find`, `ls`, `bash` (read-only subset), `subagent_search`, `question` / `questionnaire` when available, `plan_exit`
+- `read`, `grep`, `find`, `ls`, `bash` (read-only subset), `question` / `questionnaire` when available, `plan_exit`
 - Safe bash: `cat`, `head`, `tail`, `grep`, `find`, `ls`, `git status/log/diff`, `curl`, `jq`, `rg`, `fd`, etc.
 
 ### Skills
@@ -159,7 +157,6 @@ the-rime-of-the-ancient-mariner/
 │   │   ├── prompt.ts       # Template rendering helpers
 │   │   └── bash-safety.ts  # Read-only bash command validation
 │   ├── subagents/
-│   │   ├── search.ts       # Isolated read-only pi process orchestration
 │   │   └── subagents-orchestrator.ts # Prompt discovery and full-tool subagent execution
 │   ├── ui/
 │   │   └── memories-table.ts # Recent memory picker dialog
@@ -169,7 +166,7 @@ the-rime-of-the-ancient-mariner/
 │   ├── lifecycle.ts        # session_start + resources_discover events
 │   ├── memory-extension.ts # Memory tools + update-info command
 │   ├── session-extension.ts# Session info tool + command
-│   ├── sub-agents-extension.ts # Subagent discovery, execution, and search tools
+│   ├── sub-agents-extension.ts # Subagent discovery and execution tools
 │   └── plan-mode.ts        # Plan mode tool, command, flag, and hooks
 ├── skills/                 # pi skills (Markdown)
 │   └── save-summary.md
