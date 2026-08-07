@@ -35,7 +35,12 @@ Goal: align on how services, clients, endpoints, schemas, queues, jobs, and stor
 
 Present only artifacts that clarify the proposed system. Prefer visual communication over long prose:
 
-- Use Mermaid component, flow, or sequence diagrams for cross-boundary interactions.
+- Use compact plain-text diagrams in fenced `text` blocks for cross-boundary interactions.
+- Do not use Mermaid.
+- Use boxes and arrows for component maps, aligned columns for sequences, and indented
+  trees for hierarchy or control flow.
+- Keep labels concise and lines narrow enough for a terminal. Split a crowded diagram into
+  multiple focused views rather than producing one large diagram.
 - Identify existing, new, and changed boundaries.
 - Show request, event, and data flow, including meaningful failure paths.
 - Define external contracts and endpoint shapes when relevant:

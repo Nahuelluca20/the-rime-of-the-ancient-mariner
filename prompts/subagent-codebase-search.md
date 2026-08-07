@@ -39,7 +39,10 @@ $@
 Include this section only when the research reveals meaningful interactions between services, clients, endpoints, schemas, queues, jobs, stores, or other system boundaries.
 
 - Explain how the relevant components communicate.
-- Use a compact Mermaid flow or sequence diagram when it communicates the relationship better than prose.
+- Use a compact plain-text diagram in a fenced `text` block when it communicates the
+  relationship better than prose; do not use Mermaid.
+- Use boxes and arrows for component maps or aligned columns for sequences. Keep labels
+  concise and split crowded diagrams into multiple focused views.
 - Include important endpoint, message, or persisted-data shapes when confirmed by the code.
 - Keep private helper and method-level details out of this section.
 
