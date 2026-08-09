@@ -1,9 +1,17 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { PLAN_EXIT_TOOL } from "../src/plan-mode/session.ts";
+import { openSubagentsSession } from "../src/subagents/session.ts";
 import { createSubagentsOrchestrator } from "../src/subagents/subagents-orchestrator.ts";
 
 export default function subAgentsExtension(pi: ExtensionAPI) {
+	pi.registerFlag("subagents", {
+		description: "Enable subagent tools at startup",
+		type: "boolean",
+		default: false,
+	});
+
+	const subagents = openSubagentsSession(pi);
 	const subAgentsOrchestrator = createSubagentsOrchestrator({
 		pi,
 		resolveAccess: () => (pi.getActiveTools().includes(PLAN_EXIT_TOOL) ? "read-only" : "full"),
@@ -56,4 +64,15 @@ export default function subAgentsExtension(pi: ExtensionAPI) {
 			});
 		},
 	});
+
+	pi.registerCommand("subagents", {
+		description: "Toggle subagent tools",
+		handler: async (_args, ctx) => subagents.toggle(ctx),
+	});
+
+	pi.on("session_start", async (_event, ctx) => {
+		subagents.restore(ctx, pi.getFlag("subagents") === true);
+	});
+
+	pi.on("tool_call", async (event) => subagents.blockToolCall(event));
 }

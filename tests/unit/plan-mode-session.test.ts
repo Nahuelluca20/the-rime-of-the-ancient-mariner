@@ -37,8 +37,25 @@ function createHarness() {
 }
 
 describe("openPlanModeSession", () => {
-	test("keeps subagent discovery and execution active while blocking write tools", () => {
+	test("does not enable subagent tools when entering plan mode", () => {
 		const { activeTools, ctx, session } = createHarness();
+
+		session.handleCommand("on", ctx);
+
+		expect(activeTools()).not.toContain("list_available_subagents");
+		expect(activeTools()).not.toContain("subagent_execute");
+		expect(activeTools()).not.toContain("edit");
+		expect(activeTools()).not.toContain("write");
+		expect(session.blockToolCall({ toolName: "list_available_subagents", input: {} })).toEqual({
+			block: true,
+			reason:
+				"Plan mode blocks the list_available_subagents tool. Only read-only tools are available.",
+		});
+	});
+
+	test("keeps enabled subagent tools available with plan-mode restrictions", () => {
+		const { activeTools, ctx, session } = createHarness();
+		session.setSubagentsEnabled(true);
 
 		session.handleCommand("on", ctx);
 
@@ -50,5 +67,36 @@ describe("openPlanModeSession", () => {
 			session.blockToolCall({ toolName: "list_available_subagents", input: {} }),
 		).toBeUndefined();
 		expect(session.blockToolCall({ toolName: "subagent_execute", input: {} })).toBeUndefined();
+	});
+
+	test("updates subagent tools immediately while plan mode is active", () => {
+		const { activeTools, ctx, session } = createHarness();
+		session.handleCommand("on", ctx);
+
+		session.setSubagentsEnabled(true);
+		expect(activeTools()).toContain("list_available_subagents");
+		expect(activeTools()).toContain("subagent_execute");
+
+		session.setSubagentsEnabled(false);
+		expect(activeTools()).not.toContain("list_available_subagents");
+		expect(activeTools()).not.toContain("subagent_execute");
+	});
+
+	test("preserves the latest subagent state when leaving plan mode", () => {
+		const { activeTools, ctx, session } = createHarness();
+		session.handleCommand("on", ctx);
+		session.setSubagentsEnabled(true);
+
+		session.handleCommand("off", ctx);
+
+		expect(activeTools()).toContain("list_available_subagents");
+		expect(activeTools()).toContain("subagent_execute");
+
+		session.handleCommand("on", ctx);
+		session.setSubagentsEnabled(false);
+		session.handleCommand("off", ctx);
+
+		expect(activeTools()).not.toContain("list_available_subagents");
+		expect(activeTools()).not.toContain("subagent_execute");
 	});
 });
