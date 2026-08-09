@@ -98,12 +98,18 @@ describe("createSubagentsOrchestrator", () => {
 			killed: false,
 		});
 		const signal = new AbortController().signal;
+		const notifications: Array<{ message: string; type: string | undefined }> = [];
 
 		const result = await orchestrator.run({
 			promptPath: "@/package/prompts/subagent-worker.md",
 			task: "  Add the feature  ",
 			cwd: "/projects/example",
 			signal,
+			ui: {
+				notify(message, type) {
+					notifications.push({ message, type });
+				},
+			},
 		});
 
 		expect(result.content[0]).toEqual({
@@ -117,6 +123,7 @@ describe("createSubagentsOrchestrator", () => {
 			exitCode: 0,
 			truncated: false,
 		});
+		expect(notifications).toEqual([{ message: "Running subagent: subagent-worker", type: "info" }]);
 		expect(invocations).toEqual([
 			{
 				command: "pi",

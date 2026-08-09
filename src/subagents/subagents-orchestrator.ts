@@ -4,6 +4,7 @@ import {
 	DEFAULT_MAX_BYTES,
 	DEFAULT_MAX_LINES,
 	type ExtensionAPI,
+	type ExtensionUIContext,
 	type SlashCommandInfo,
 	formatSize,
 	truncateHead,
@@ -18,6 +19,7 @@ export interface RunSubagentParams {
 	task: string;
 	cwd: string;
 	signal?: AbortSignal;
+	ui?: Pick<ExtensionUIContext, "notify">;
 }
 
 export interface SubagentExecutionDetails {
@@ -106,7 +108,7 @@ export function createSubagentsOrchestrator({
 			};
 		},
 
-		async run({ promptPath, task, cwd, signal }) {
+		async run({ promptPath, task, cwd, signal, ui }) {
 			const normalizedTask = task.trim();
 			if (!normalizedTask) {
 				throw new Error("Subagent task must not be empty.");
@@ -124,6 +126,8 @@ export function createSubagentsOrchestrator({
 
 			const authoritativePath = normalizePromptPath(template.sourceInfo.path, cwd);
 			const promptName = basename(authoritativePath, extname(authoritativePath));
+			ui?.notify(`Running subagent: ${promptName}`, "info");
+
 			const args = [
 				"-p",
 				"--no-session",

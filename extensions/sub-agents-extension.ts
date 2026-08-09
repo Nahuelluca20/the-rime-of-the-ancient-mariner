@@ -46,6 +46,7 @@ export default function subAgentsExtension(pi: ExtensionAPI) {
 				task: params.task,
 				cwd: ctx.cwd,
 				signal,
+				ui: ctx.ui,
 			});
 		},
 	});
