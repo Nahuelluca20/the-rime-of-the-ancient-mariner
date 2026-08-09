@@ -102,20 +102,22 @@ The extension registers `Shift+Tab` as a shortcut for toggling plan mode. In def
 
 ```json
 {
-	"app.clipboard.pasteImage": "ctrl+v",
-	"app.thinking.toggle": "ctrl+r",
-	"app.thinking.cycle": "ctrl+t"
+ "app.clipboard.pasteImage": "ctrl+v",
+ "app.thinking.toggle": "ctrl+r",
+ "app.thinking.cycle": "ctrl+t"
 }
 ```
 
 After editing the file, run `/reload` in pi. With the example above, `Shift+Tab` toggles plan mode, `Ctrl+T` cycles thinking level, `Ctrl+R` hides/shows thinking blocks, and `Ctrl+V` keeps the default paste-image behavior on macOS.
 
 **Blocked operations in plan mode:**
+
 - All file writes (`edit`, `write`)
 - Destructive bash (`rm`, `mv`, `mkdir`, `git commit`, `npm install`, etc.)
 - Package managers, editors, system control commands
 
 **Allowed operations in plan mode:**
+
 - `read`, `grep`, `find`, `ls`, `bash` (read-only subset), `question` / `questionnaire` when available, `plan_exit`
 - Safe bash: `cat`, `head`, `tail`, `grep`, `find`, `ls`, `git status/log/diff`, `curl`, `jq`, `rg`, `fd`, etc.
 
@@ -166,7 +168,7 @@ the-rime-of-the-ancient-mariner/
 │   ├── lifecycle.ts        # session_start + resources_discover events
 │   ├── memory-extension.ts # Memory tools + update-info command
 │   ├── session-extension.ts# Session info tool + command
-│   ├── sub-agents-extension.ts # Subagent discovery and execution tools
+│   ├── subagents-extension.ts # Subagent discovery and execution tools
 │   └── plan-mode.ts        # Plan mode tool, command, flag, and hooks
 ├── skills/                 # pi skills (Markdown)
 │   └── save-summary.md
@@ -234,14 +236,14 @@ import lifeCycleExtension from "../../extensions/lifecycle.ts";
 import memoryExtension from "../../extensions/memory-extension.ts";
 import sessionExtension from "../../extensions/session-extension.ts";
 import planModeExtension from "../../extensions/plan-mode.ts";
-import subAgentsExtension from "../../extensions/sub-agents-extension.ts";
+import subAgentsExtension from "../../extensions/subagents-extension.ts";
 
 export default function (pi: ExtensionAPI) {
-	sessionExtension(pi);
-	memoryExtension(pi);
-	lifeCycleExtension(pi, { discoverResources: true });
-	subAgentsExtension(pi);
-	planModeExtension(pi);
+ sessionExtension(pi);
+ memoryExtension(pi);
+ lifeCycleExtension(pi, { discoverResources: true });
+ subAgentsExtension(pi);
+ planModeExtension(pi);
 }
 ```
 

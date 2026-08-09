@@ -20,14 +20,14 @@ import lifeCycleExtension from "../../extensions/lifecycle.ts";
 import memoryExtension from "../../extensions/memory-extension.ts";
 import sessionExtension from "../../extensions/session-extension.ts";
 import planModeExtension from "../../extensions/plan-mode.ts";
-import subAgentsExtension from "../../extensions/sub-agents-extension.ts";
+import subAgentsExtension from "../../extensions/subagents-extension.ts";
 
 export default function (pi: ExtensionAPI) {
-	sessionExtension(pi);
-	memoryExtension(pi);
-	lifeCycleExtension(pi, { discoverResources: true });
-	subAgentsExtension(pi);
-	planModeExtension(pi);
+ sessionExtension(pi);
+ memoryExtension(pi);
+ lifeCycleExtension(pi, { discoverResources: true });
+ subAgentsExtension(pi);
+ planModeExtension(pi);
 }
 ```
 
@@ -57,9 +57,9 @@ For local testing, remap the built-in thinking shortcuts in `~/.pi/agent/keybind
 
 ```json
 {
-	"app.clipboard.pasteImage": "ctrl+v",
-	"app.thinking.toggle": "ctrl+r",
-	"app.thinking.cycle": "ctrl+t"
+ "app.clipboard.pasteImage": "ctrl+v",
+ "app.thinking.toggle": "ctrl+r",
+ "app.thinking.cycle": "ctrl+t"
 }
 ```
 
