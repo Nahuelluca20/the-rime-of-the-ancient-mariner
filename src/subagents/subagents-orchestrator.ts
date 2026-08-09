@@ -4,13 +4,17 @@ import {
 	DEFAULT_MAX_BYTES,
 	DEFAULT_MAX_LINES,
 	type ExtensionAPI,
+	type ExtensionUIContext,
 	type SlashCommandInfo,
 	formatSize,
 	truncateHead,
 } from "@earendil-works/pi-coding-agent";
 
+export type SubagentAccess = "full" | "read-only";
+
 interface SubagentsOrchestratorOptions {
 	pi: Pick<ExtensionAPI, "exec" | "getCommands">;
+	resolveAccess: () => SubagentAccess;
 }
 
 export interface RunSubagentParams {
@@ -18,6 +22,7 @@ export interface RunSubagentParams {
 	task: string;
 	cwd: string;
 	signal?: AbortSignal;
+	ui?: Pick<ExtensionUIContext, "notify">;
 }
 
 export interface SubagentExecutionDetails {
@@ -46,6 +51,7 @@ export type SubagentTemplate = {
 };
 
 const FULL_CODING_TOOLS = "read,bash,edit,write,grep,find,ls";
+const READ_ONLY_TOOLS = "read,grep,find,ls";
 
 function normalizePromptPath(promptPath: string, cwd: string): string {
 	const pathWithoutAtPrefix = promptPath.startsWith("@") ? promptPath.slice(1) : promptPath;
@@ -72,6 +78,7 @@ function formatFailure(result: { code: number; stderr: string; stdout: string })
 
 export function createSubagentsOrchestrator({
 	pi,
+	resolveAccess,
 }: SubagentsOrchestratorOptions): SubagentsOrchestrator {
 	function subagentPromptTemplates(): SlashCommandInfo[] {
 		return pi
@@ -106,7 +113,7 @@ export function createSubagentsOrchestrator({
 			};
 		},
 
-		async run({ promptPath, task, cwd, signal }) {
+		async run({ promptPath, task, cwd, signal, ui }) {
 			const normalizedTask = task.trim();
 			if (!normalizedTask) {
 				throw new Error("Subagent task must not be empty.");
@@ -124,6 +131,8 @@ export function createSubagentsOrchestrator({
 
 			const authoritativePath = normalizePromptPath(template.sourceInfo.path, cwd);
 			const promptName = basename(authoritativePath, extname(authoritativePath));
+			ui?.notify(`Running subagent: ${promptName}`, "info");
+
 			const args = [
 				"-p",
 				"--no-session",
@@ -133,7 +142,7 @@ export function createSubagentsOrchestrator({
 				"--prompt-template",
 				authoritativePath,
 				"--tools",
-				FULL_CODING_TOOLS,
+				resolveAccess() === "full" ? FULL_CODING_TOOLS : READ_ONLY_TOOLS,
 				`/${promptName} ${normalizedTask}`,
 			];
 			const result = await pi.exec("pi", args, { cwd, signal });

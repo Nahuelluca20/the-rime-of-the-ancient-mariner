@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- Kept subagent discovery and execution available in plan mode while restricting child sessions to native read-only tools.
+
 ## [0.1.1] - 2026-06-07
 
 - update root for creation of database

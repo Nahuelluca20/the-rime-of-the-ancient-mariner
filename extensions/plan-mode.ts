@@ -2,6 +2,10 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { openPlanModeSession } from "../src/plan-mode/session.ts";
+import {
+	SUBAGENTS_AVAILABILITY_CHANGED_EVENT,
+	type SubagentsAvailabilityChanged,
+} from "../src/subagents/session.ts";
 
 export default function planModeExtension(pi: ExtensionAPI) {
 	const baseDir = dirname(fileURLToPath(import.meta.url));
@@ -29,6 +33,14 @@ export default function planModeExtension(pi: ExtensionAPI) {
 
 	pi.on("session_start", async (_event, ctx) => {
 		planMode.restore(ctx, pi.getFlag("plan") === true);
+	});
+
+	pi.events.on(SUBAGENTS_AVAILABILITY_CHANGED_EVENT, (data) => {
+		if (typeof data !== "object" || data === null || !("enabled" in data)) return;
+		const change = data as SubagentsAvailabilityChanged;
+		if (typeof change.enabled === "boolean") {
+			planMode.setSubagentsEnabled(change.enabled);
+		}
 	});
 
 	pi.on("before_agent_start", async (event) => planMode.beforeAgentStart(event));

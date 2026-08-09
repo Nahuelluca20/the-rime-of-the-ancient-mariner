@@ -7,6 +7,7 @@ export interface RecentMemory {
 	name: string;
 	description: string;
 	sessionType: string;
+	tags: string[];
 	preview: string;
 	updatedAt: Date;
 }
@@ -28,6 +29,12 @@ function getMemorySessionType(data: AgentMemoryData): string {
 	return typeof sessionType === "string" ? sessionType : "";
 }
 
+function getMemoryTags(data: AgentMemoryData): string[] {
+	const tags = data.tags;
+	if (!Array.isArray(tags)) return [];
+	return tags.filter((tag): tag is string => typeof tag === "string");
+}
+
 export function createMemoryCatalog(repository: MemoryRepository): MemoryCatalog {
 	return {
 		listRecentMemories(limit = 10, offset = 0) {
@@ -36,6 +43,7 @@ export function createMemoryCatalog(repository: MemoryRepository): MemoryCatalog
 				name: row.name,
 				description: getMemoryDescription(row.data),
 				sessionType: getMemorySessionType(row.data),
+				tags: getMemoryTags(row.data),
 				preview: formatMemoryPreview(row.data),
 				updatedAt: row.updatedAt,
 			}));

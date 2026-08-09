@@ -12,10 +12,6 @@ export default function lifecycleExtension(
 ) {
 	const baseDir = dirname(fileURLToPath(import.meta.url));
 
-	pi.on("session_start", async (_event, ctx) => {
-		ctx.ui.notify(`Session started at ${new Date().toISOString()}`, "info");
-	});
-
 	if (options.discoverResources) {
 		pi.on("resources_discover", async (_event, _ctx) => {
 			return {

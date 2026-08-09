@@ -6,7 +6,10 @@ import {
 	type ExtensionAPI,
 	type SlashCommandInfo,
 } from "@earendil-works/pi-coding-agent";
-import { createSubagentsOrchestrator } from "../../src/subagents/subagents-orchestrator.ts";
+import {
+	type SubagentAccess,
+	createSubagentsOrchestrator,
+} from "../../src/subagents/subagents-orchestrator.ts";
 
 interface Invocation {
 	command: string;
@@ -33,7 +36,11 @@ function promptCommand(
 	};
 }
 
-function createHarness(commands: SlashCommandInfo[], result: ExecResult) {
+function createHarness(
+	commands: SlashCommandInfo[],
+	result: ExecResult,
+	access: SubagentAccess = "full",
+) {
 	const invocations: Invocation[] = [];
 	const pi: Pick<ExtensionAPI, "exec" | "getCommands"> = {
 		getCommands: () => commands,
@@ -45,7 +52,7 @@ function createHarness(commands: SlashCommandInfo[], result: ExecResult) {
 
 	return {
 		invocations,
-		orchestrator: createSubagentsOrchestrator({ pi }),
+		orchestrator: createSubagentsOrchestrator({ pi, resolveAccess: () => access }),
 	};
 }
 
@@ -98,12 +105,18 @@ describe("createSubagentsOrchestrator", () => {
 			killed: false,
 		});
 		const signal = new AbortController().signal;
+		const notifications: Array<{ message: string; type: string | undefined }> = [];
 
 		const result = await orchestrator.run({
 			promptPath: "@/package/prompts/subagent-worker.md",
 			task: "  Add the feature  ",
 			cwd: "/projects/example",
 			signal,
+			ui: {
+				notify(message, type) {
+					notifications.push({ message, type });
+				},
+			},
 		});
 
 		expect(result.content[0]).toEqual({
@@ -117,6 +130,7 @@ describe("createSubagentsOrchestrator", () => {
 			exitCode: 0,
 			truncated: false,
 		});
+		expect(notifications).toEqual([{ message: "Running subagent: subagent-worker", type: "info" }]);
 		expect(invocations).toEqual([
 			{
 				command: "pi",
@@ -135,6 +149,29 @@ describe("createSubagentsOrchestrator", () => {
 				options: { cwd: "/projects/example", signal },
 			},
 		]);
+	});
+
+	test("runs with native read-only tools when access is restricted", async () => {
+		const commands = [promptCommand("subagent-research", "/package/prompts/subagent-research.md")];
+		const { invocations, orchestrator } = createHarness(
+			commands,
+			{
+				stdout: "Research complete.",
+				stderr: "",
+				code: 0,
+				killed: false,
+			},
+			"read-only",
+		);
+
+		await orchestrator.run({
+			promptPath: "/package/prompts/subagent-research.md",
+			task: "Inspect the implementation",
+			cwd: "/projects/example",
+		});
+
+		expect(invocations[0]?.args).toContain("read,grep,find,ls");
+		expect(invocations[0]?.args).not.toContain("read,bash,edit,write,grep,find,ls");
 	});
 
 	test("rejects a prompt path that was not discovered", async () => {

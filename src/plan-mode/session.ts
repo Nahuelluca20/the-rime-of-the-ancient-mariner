@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
+import { SUBAGENT_TOOL_NAMES } from "../subagents/session.js";
 import { isReadOnlyBashCommand } from "./bash-safety.ts";
 import {
 	PLAN_MODE_LABEL,
@@ -12,7 +13,7 @@ import {
 import { buildPlanInfo, renderPlanPrompt } from "./prompt.ts";
 
 const STATE_ENTRY_TYPE = "plan-mode-state";
-const PLAN_EXIT_TOOL = "plan_exit";
+export const PLAN_EXIT_TOOL = "plan_exit";
 
 const READ_ONLY_TOOLS = [
 	"read",
@@ -58,6 +59,7 @@ export interface PlanModeSession {
 	planExitTool(): Parameters<ExtensionAPI["registerTool"]>[0];
 	handleCommand(args: string, ctx: ExtensionContext): void;
 	restore(ctx: ExtensionContext, startEnabled: boolean): void;
+	setSubagentsEnabled(enabled: boolean): void;
 	beforeAgentStart(event: PlanModeBeforeAgentStart): Promise<{ systemPrompt: string } | undefined>;
 	blockToolCall(event: PlanModeToolCall): ToolBlockResult | undefined;
 	handleAgentEnd(ctx: ExtensionContext): Promise<void>;
@@ -75,6 +77,7 @@ export function openPlanModeSession(pi: ExtensionAPI, options: PlanModeOptions):
 	let savedEditorComponent: PlanModeEditorFactory | undefined;
 	let hasPlanModeEditor = false;
 	let exitRequested = false;
+	let subagentsEnabled = false;
 
 	function saveState(): void {
 		pi.appendEntry(STATE_ENTRY_TYPE, { enabled, savedActiveTools, exitRequested });
@@ -85,8 +88,23 @@ export function openPlanModeSession(pi: ExtensionAPI, options: PlanModeOptions):
 		return names.filter((name) => available.has(name));
 	}
 
+	function readOnlyTools(): string[] {
+		return [...READ_ONLY_TOOLS, ...(subagentsEnabled ? availableTools(SUBAGENT_TOOL_NAMES) : [])];
+	}
+
+	function syncSavedSubagentTools(): void {
+		if (!savedActiveTools) return;
+
+		const subagentTools = new Set<string>(SUBAGENT_TOOL_NAMES);
+		savedActiveTools = savedActiveTools.filter((name) => !subagentTools.has(name));
+		if (subagentsEnabled) {
+			savedActiveTools.push(...availableTools(SUBAGENT_TOOL_NAMES));
+		}
+	}
+
 	function captureSavedTools(): void {
 		savedActiveTools = pi.getActiveTools().filter((name) => name !== PLAN_EXIT_TOOL);
+		syncSavedSubagentTools();
 	}
 
 	function installPlanModeEditor(ctx: ExtensionContext): void {
@@ -132,7 +150,7 @@ export function openPlanModeSession(pi: ExtensionAPI, options: PlanModeOptions):
 		}
 		enabled = true;
 		exitRequested = false;
-		pi.setActiveTools(availableTools(READ_ONLY_TOOLS));
+		pi.setActiveTools(availableTools(readOnlyTools()));
 		saveState();
 		refreshUi(ctx);
 		if (notify && ctx.hasUI) {
@@ -183,10 +201,20 @@ export function openPlanModeSession(pi: ExtensionAPI, options: PlanModeOptions):
 			enabled = true;
 		}
 
+		syncSavedSubagentTools();
 		if (enabled) {
-			pi.setActiveTools(availableTools(READ_ONLY_TOOLS));
+			pi.setActiveTools(availableTools(readOnlyTools()));
 		}
 		refreshUi(ctx);
+	}
+
+	function setSubagentsEnabled(nextEnabled: boolean): void {
+		subagentsEnabled = nextEnabled;
+		syncSavedSubagentTools();
+		if (enabled) {
+			pi.setActiveTools(availableTools(readOnlyTools()));
+			saveState();
+		}
 	}
 
 	function handleCommand(args: string, ctx: ExtensionContext): void {
@@ -204,7 +232,7 @@ export function openPlanModeSession(pi: ExtensionAPI, options: PlanModeOptions):
 			case "status":
 				ctx.ui.notify(
 					enabled
-						? `Plan mode is active. Tools: ${availableTools(READ_ONLY_TOOLS).join(", ")}`
+						? `Plan mode is active. Tools: ${availableTools(readOnlyTools()).join(", ")}`
 						: "Plan mode is inactive.",
 					"info",
 				);
@@ -222,7 +250,7 @@ export function openPlanModeSession(pi: ExtensionAPI, options: PlanModeOptions):
 		const template = await readFile(options.planTemplatePath, "utf8");
 		const renderedPrompt = renderPlanPrompt(template, {
 			task: event.prompt,
-			planInfo: buildPlanInfo(availableTools(READ_ONLY_TOOLS)),
+			planInfo: buildPlanInfo(availableTools(readOnlyTools())),
 		});
 
 		return {
@@ -233,7 +261,7 @@ export function openPlanModeSession(pi: ExtensionAPI, options: PlanModeOptions):
 	function blockToolCall(event: PlanModeToolCall): ToolBlockResult | undefined {
 		if (!enabled) return undefined;
 
-		if (!READ_ONLY_TOOLS.includes(event.toolName)) {
+		if (!readOnlyTools().includes(event.toolName)) {
 			return {
 				block: true,
 				reason: `Plan mode blocks the ${event.toolName} tool. Only read-only tools are available.`,
@@ -322,6 +350,7 @@ export function openPlanModeSession(pi: ExtensionAPI, options: PlanModeOptions):
 		planExitTool,
 		handleCommand,
 		restore,
+		setSubagentsEnabled,
 		beforeAgentStart,
 		blockToolCall,
 		handleAgentEnd,
