@@ -15,8 +15,8 @@ export default function subAgentsExtension(pi: ExtensionAPI) {
 		description: "List specialized subagents with their purpose and prompt path.",
 		promptSnippet: "Discover specialized subagents available for delegated tasks",
 		promptGuidelines: [
-			"Before researching, exploring, investigating, reviewing, or explaining a codebase directly, call list_available_subagents to find a matching specialized subagent.",
-			"Use list_available_subagents when a delegated task could benefit from an isolated context window or specialized instructions.",
+			"Use list_available_subagents only when delegation is likely useful and no suitable subagent or prompt path is already known from the current conversation.",
+			"Do not call list_available_subagents again when a suitable subagent was already discovered earlier in the session.",
 		],
 		parameters: Type.Object({}),
 		async execute() {
@@ -31,8 +31,10 @@ export default function subAgentsExtension(pi: ExtensionAPI) {
 			"Run a discovered specialized subagent in an isolated Pi process. It uses full coding tools normally and native read-only tools in plan mode.",
 		promptSnippet: "Delegate a task to a specialized isolated subagent",
 		promptGuidelines: [
-			"After list_available_subagents finds a subagent whose description matches the task, call subagent_execute with its exact prompt path and a focused task.",
-			"For codebase search, exploration, or implementation-understanding requests, use the matching codebase-research subagent through subagent_execute before investigating in the parent context.",
+			"Use subagent_execute when a task requires substantial exploration of unfamiliar code, broad cross-module research, or an isolated context window.",
+			"Do not use subagent_execute for follow-up changes to code already inspected or implemented in the current conversation when the relevant files and behavior are known.",
+			"Reuse previous subagent findings instead of repeating equivalent research.",
+			"Run another codebase-search subagent only when the requested change expands into unfamiliar areas, the existing findings may be stale, or important context is missing.",
 		],
 		parameters: Type.Object({
 			promptPath: Type.String({
