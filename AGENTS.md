@@ -41,6 +41,8 @@ the-ancient-mariner/
 │   ├── session/
 │   │   ├── info.ts            # getSessionInfo(ctx) — single source for session metadata
 │   │   └── memory.ts          # SessionMemory: current-session memory operations
+│   ├── ui/
+│   │   └── memory-browser.ts  # MemoryBrowserDialog: searchable memory library overlay
 │   └── db/
 │       └── connection.ts      # openDb() — internal; only memory/repository imports it
 ├── extensions/                # pi extensions (runtime-loaded; not compiled)
@@ -243,3 +245,5 @@ Both directories are referenced in `package.json` → `"pi"`.
 - **`dist/` is vestigial**: `tsc` compiles `src/` to it, but `package.json` has no `main`/`exports` field — nobody consumes it. Don't commit it; don't depend on it.
 - **Local resource discovery only**: `lifeCycleExtension(pi, { discoverResources: true })` is for the local `.pi/extensions/index.ts` harness only. Do not enable it for package/production loading because `package.json["pi"]` already declares `skills/` and `prompts/`; enabling both causes prompt collisions.
 - **MVP direction (`docs/mvp.md`)**: knowledge tracking — staleness detection, search, summary, store. New tools should live in `extensions/memory-extension.ts` and delegate to `src/memory/`.
+- **Overlay components must size themselves to the terminal.** pi clips an overlay with `overlayLines.slice(0, maxHeight)`, so a component that renders a fixed number of lines loses its footer and bottom border on short terminals. `MemoryBrowserDialog` derives its height on every render from `tui.terminal.rows` using the same clamp its `overlayOptions` declare (`maxHeight: "90%"`, `margin: 2`); if those options change, `computeBrowserLayout` has to change with them. `tests/unit/memory-browser.test.ts` pins the invariant, along with every rendered line being exactly the requested width.
+- **Read theme and terminal size through callbacks, not captured values.** `ctx.ui.custom` hands the factory a `theme` snapshot; `ctx.ui.theme` is a live getter, so passing `() => ctx.ui.theme` keeps an open dialog correct across a theme switch.

@@ -15,7 +15,7 @@
 | **Agent Memory Store** | Persist project-scoped key-value memories with JSON data via SQLite + Drizzle ORM |
 | **Session Tracking** | Save and update session metadata with `update-info` command |
 | **Typed Session Summaries** | Distill a session into `{title, description, context, sessionType, tags}` and merge into persistent memory |
-| **Recent Memory Picker** | Browse newest memories with visible session-type badges, preview contents with `Tab`, and insert selected memories into the LLM context |
+| **Memory Library** | Search memories as you type, scope to the current project or all of them, read contents in a live preview pane, and insert any number into the LLM context |
 | **Plan Mode** | Collaborative read-only planning through System Architecture, Program Design, and reviewable Vertical Slices |
 | **Subagents** | Discover prompt-based subagents and run them in isolated pi processes |
 | **Session Info** | Inspect session metadata (ID, file, name, CWD, entry count, leaf) |
@@ -62,35 +62,32 @@ Supported `sessionType` values are `implementation`, `code-exploration`, `implem
 | Command | Description |
 |---------|-------------|
 | `/update-info` | Update the current session's stored memory in place |
-| `/recent-memories` | Open a paged picker for recent memories and send selected memories to the LLM |
+| `/recent-memories` | Open the searchable memory library and send selected memories to the LLM |
 | `/session-info` | Print current session metadata (ID, file, name, CWD, entries) |
 | `/plan-mode [on\|off\|toggle\|status]` | Toggle native read-only plan mode |
 | `Shift+Tab` | Toggle native read-only plan mode, if `Shift+Tab` is not already bound to a built-in pi action |
 | `--plan` (flag) | Start pi with plan mode enabled from the start |
 
-### Recent Memories
+### Memory Library
 
-Use `/recent-memories` to open an overlay dialog showing the newest stored memories, five per page. The dialog displays each memory's project, name, session-type badge, description, and last update date. Press `Tab` on a focused memory to open a larger preview of its stored data; long previews remain scrollable with the arrow keys.
+Use `/recent-memories` to open the memory library: an overlay with a search field, a scrolling result list, and a live preview of whatever memory the cursor is on. There are no modes to switch between — typing always searches, and the preview always follows the cursor. On wide terminals the preview sits beside the list; on narrow ones it moves below it. The dialog sizes itself to the terminal on every render, so it fills a tall window and stays intact in a short one.
 
-Keyboard shortcuts in the table:
+The library opens scoped to the current project when that project has memories, and `Shift+Tab` widens it to every project.
 
 | Key | Action |
 |-----|--------|
-| `↑` / `↓` | Move through memories on the current page |
-| `Tab` | Open preview for the focused memory |
-| `Space` | Select or unselect the focused memory |
-| `←` / `→` | Move between pages |
-| `Enter` | Insert selected memories into the LLM context |
+| *any character* | Search by memory name, project, description, or tag |
+| `↑` / `↓` | Move through results |
+| `PgUp` / `PgDn` | Move a page at a time |
+| `Tab` | Check or uncheck the focused memory |
+| `Shift+Tab` | Switch between the current project and all projects |
+| `Shift+↑` / `Shift+↓` | Scroll the preview pane (`Alt` also works) |
+| `Enter` | Insert the checked memories, or the focused one when nothing is checked |
 | `Esc` | Cancel |
 
-Keyboard shortcuts in preview mode:
+Checked memories stay checked while you search and change scope, so a selection can be assembled from several queries. Search requires every space-separated token to appear in a memory; a single token that matches nothing literally falls back to fuzzy matching, so `authref` still finds `auth-refactor`.
 
-| Key | Action |
-|-----|--------|
-| `↑` / `↓` | Scroll the preview text |
-| `Space` | Select or unselect the previewed memory |
-| `Enter` | Insert selected memories into the LLM context |
-| `Tab` / `Esc` | Return to the table |
+The dialog loads the newest 500 memories and searches within them; when the store is larger, the scope row shows both counts. Navigation keys follow pi's keybindings, so rebinding `tui.select.*` rebinds them here too.
 
 Submitted memories are formatted with the same context renderer used by the `insert_memories` tool and sent as a `memories` custom message. Inserted context includes `sessionType`, `tags`, `cwd`, `title`, `description`, and `context` when present. Preview text is formatted separately for human-readable browsing and does not change what gets inserted into the LLM context.
 
@@ -150,7 +147,7 @@ the-rime-of-the-ancient-mariner/
 │   │   ├── types.ts        # Public type re-exports
 │   │   ├── repository.ts   # MemoryRepository: persistence-only table access
 │   │   ├── catalog.ts      # MemoryCatalog: recent-memory browsing projections
-│   │   └── preview.ts      # Human-readable preview formatting for memory picker UI
+│   │   └── preview.ts      # Human-readable preview formatting for the memory library UI
 │   ├── session/
 │   │   ├── info.ts         # getSessionInfo(ctx) — session metadata extraction
 │   │   └── memory.ts       # SessionMemory: current-session memory operations
@@ -161,7 +158,7 @@ the-rime-of-the-ancient-mariner/
 │   ├── subagents/
 │   │   └── subagents-orchestrator.ts # Prompt discovery and full-tool subagent execution
 │   ├── ui/
-│   │   └── memories-table.ts # Recent memory picker dialog
+│   │   └── memory-browser.ts # Searchable memory library dialog
 │   └── db/
 │       └── connection.ts   # openDb() — internal sqlite + Drizzle + auto-migration
 ├── extensions/             # pi extensions (runtime-loaded, NOT compiled)
@@ -206,7 +203,7 @@ repository.createMemory("my-project", "session-001", { summary: "..." });
 repository.updateMemory("my-project", "session-001", { summary: "updated" });
 repository.findMemory("my-project", "session-001");
 repository.listMemories("my-project");
-catalog.listRecentMemories(5, 0); // newest first, paged, includes session type + preview text
+catalog.listRecentMemories(5, 0); // newest first, paged, includes session type, tags + preview text
 repository.countMemories();
 ```
 

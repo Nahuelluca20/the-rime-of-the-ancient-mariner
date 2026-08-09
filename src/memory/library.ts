@@ -1,10 +1,12 @@
+import { basename } from "node:path";
 import type {
 	AgentToolResult,
 	ExtensionAPI,
 	ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
+import { getSessionInfo } from "../session/info.ts";
 import { type SessionSummary, createSessionMemory } from "../session/memory.ts";
-import { MemoriesTableDialog } from "../ui/memories-table.ts";
+import { MemoryBrowserDialog } from "../ui/memory-browser.ts";
 import { createMemoryCatalog } from "./catalog.ts";
 import {
 	type MemoryInfoForRetrieval,
@@ -39,6 +41,13 @@ export interface MemoryLibraryOptions {
 	repository: MemoryRepository;
 	sendMessage: ExtensionAPI["sendMessage"];
 }
+
+/**
+ * Newest memories loaded into the browser dialog. Search and scope filtering run over
+ * this slice, so it is large enough to cover a store worth browsing without holding
+ * every memory body in memory.
+ */
+const BROWSE_INDEX_LIMIT = 500;
 
 /**
  * User-facing memory operations for pi tools and commands.
@@ -138,36 +147,27 @@ export function createMemoryLibrary({
 		},
 
 		async pickAndInsertRecentMemories(ctx) {
-			const pageSize = 5;
-			const loadPage = (pageIndex: number) =>
-				catalog.listRecentMemories(pageSize, pageIndex * pageSize);
-			const totalRows = repository.countMemories();
-			const rows = loadPage(0);
+			const entries = catalog.listRecentMemories(BROWSE_INDEX_LIMIT, 0);
+			const totalCount = repository.countMemories();
+			const currentProject = basename(getSessionInfo(ctx).cwd) || null;
 
 			const selected = await ctx.ui.custom<MemoryInfoForRetrieval[] | null>(
-				(tui, theme, _kb, done) => {
-					const dialog = new MemoriesTableDialog({
-						title: "Recent Memories",
-						rows,
-						totalRows,
-						pageSize,
-						loadPage,
+				(tui, theme, keybindings, done) =>
+					new MemoryBrowserDialog({
+						title: "Memory Library",
+						entries,
+						totalCount,
+						currentProject,
+						keybindings,
+						getTheme: () => ctx.ui.theme ?? theme,
+						terminalRows: () => tui.terminal.rows,
+						requestRender: () => tui.requestRender(),
 						onSubmit: done,
 						onCancel: () => done(null),
-						theme,
-					});
-					return {
-						render: (width: number) => dialog.render(width),
-						invalidate: () => dialog.invalidate(),
-						handleInput: (data: string) => {
-							dialog.handleInput(data);
-							tui.requestRender();
-						},
-					};
-				},
+					}),
 				{
 					overlay: true,
-					overlayOptions: { width: "90%", minWidth: 80, maxHeight: "90%", margin: 2 },
+					overlayOptions: { width: "90%", minWidth: 70, maxHeight: "90%", margin: 2 },
 				},
 			);
 
