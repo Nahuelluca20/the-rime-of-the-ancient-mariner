@@ -12,7 +12,7 @@ import {
 import { buildPlanInfo, renderPlanPrompt } from "./prompt.ts";
 
 const STATE_ENTRY_TYPE = "plan-mode-state";
-const PLAN_EXIT_TOOL = "plan_exit";
+export const PLAN_EXIT_TOOL = "plan_exit";
 
 const READ_ONLY_TOOLS = [
 	"read",
@@ -26,6 +26,8 @@ const READ_ONLY_TOOLS = [
 	"get_memory",
 	"list_memories",
 	"count_lines",
+	"list_available_subagents",
+	"subagent_execute",
 	PLAN_EXIT_TOOL,
 ];
 

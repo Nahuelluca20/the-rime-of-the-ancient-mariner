@@ -10,8 +10,11 @@ import {
 	truncateHead,
 } from "@earendil-works/pi-coding-agent";
 
+export type SubagentAccess = "full" | "read-only";
+
 interface SubagentsOrchestratorOptions {
 	pi: Pick<ExtensionAPI, "exec" | "getCommands">;
+	resolveAccess: () => SubagentAccess;
 }
 
 export interface RunSubagentParams {
@@ -48,6 +51,7 @@ export type SubagentTemplate = {
 };
 
 const FULL_CODING_TOOLS = "read,bash,edit,write,grep,find,ls";
+const READ_ONLY_TOOLS = "read,grep,find,ls";
 
 function normalizePromptPath(promptPath: string, cwd: string): string {
 	const pathWithoutAtPrefix = promptPath.startsWith("@") ? promptPath.slice(1) : promptPath;
@@ -74,6 +78,7 @@ function formatFailure(result: { code: number; stderr: string; stdout: string })
 
 export function createSubagentsOrchestrator({
 	pi,
+	resolveAccess,
 }: SubagentsOrchestratorOptions): SubagentsOrchestrator {
 	function subagentPromptTemplates(): SlashCommandInfo[] {
 		return pi
@@ -137,7 +142,7 @@ export function createSubagentsOrchestrator({
 				"--prompt-template",
 				authoritativePath,
 				"--tools",
-				FULL_CODING_TOOLS,
+				resolveAccess() === "full" ? FULL_CODING_TOOLS : READ_ONLY_TOOLS,
 				`/${promptName} ${normalizedTask}`,
 			];
 			const result = await pi.exec("pi", args, { cwd, signal });

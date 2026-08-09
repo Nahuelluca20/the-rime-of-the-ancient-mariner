@@ -51,9 +51,9 @@ Once installed, pi loads all extensions, skills, and prompts automatically. The 
 | `get_current_session` | Return current pi session metadata | _(none)_ |
 | `count_lines` | Count lines in a file | `path: string` |
 | `list_available_subagents` | List loaded `subagent-*` prompt templates and their authoritative paths | _(none)_ |
-| `subagent_execute` | Run a discovered prompt in an isolated pi process with full coding tools | `promptPath: string`, `task: string` |
+| `subagent_execute` | Run a discovered prompt in an isolated pi process with mode-appropriate tools | `promptPath: string`, `task: string` |
 
-`subagent_execute` accepts only paths returned by `list_available_subagents`. Its child process has the full built-in coding tool set (`read`, `bash`, `edit`, `write`, `grep`, `find`, and `ls`), so selected prompts can modify files and execute shell commands. It is intentionally unavailable while native plan mode is active. Cancelling the parent tool terminates the child process; failed children report their exit code and prefer `stderr` diagnostics, falling back to `stdout` when needed.
+`subagent_execute` accepts only paths returned by `list_available_subagents`. Normally its child process has the full built-in coding tool set (`read`, `bash`, `edit`, `write`, `grep`, `find`, and `ls`). In native plan mode, subagents remain available but the child receives only native read-only tools (`read`, `grep`, `find`, and `ls`); `bash`, `edit`, and `write` are omitted. Cancelling the parent tool terminates the child process; failed children report their exit code and prefer `stderr` diagnostics, falling back to `stdout` when needed.
 
 Supported `sessionType` values are `implementation`, `code-exploration`, `implementation-exploration`, `code-understanding`, and `mixed`.
 
@@ -115,8 +115,9 @@ After editing the file, run `/reload` in pi. With the example above, `Shift+Tab`
 
 **Allowed operations in plan mode:**
 
-- `read`, `grep`, `find`, `ls`, `bash` (read-only subset), `question` / `questionnaire` when available, `plan_exit`
-- Safe bash: `cat`, `head`, `tail`, `grep`, `find`, `ls`, `git status/log/diff`, `curl`, `jq`, `rg`, `fd`, etc.
+- `read`, `grep`, `find`, `ls`, `bash` (read-only subset), `question` / `questionnaire` when available, `list_available_subagents`, `subagent_execute`, `plan_exit`
+- Plan-mode subagents run with `read`, `grep`, `find`, and `ls`; they do not receive `bash`, `edit`, or `write`
+- Safe parent-session bash: `cat`, `head`, `tail`, `grep`, `find`, `ls`, `git status/log/diff`, `curl`, `jq`, `rg`, `fd`, etc.
 
 ### Skills
 

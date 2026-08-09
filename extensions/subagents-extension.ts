@@ -1,9 +1,13 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
+import { PLAN_EXIT_TOOL } from "../src/plan-mode/session.ts";
 import { createSubagentsOrchestrator } from "../src/subagents/subagents-orchestrator.ts";
 
 export default function subAgentsExtension(pi: ExtensionAPI) {
-	const subAgentsOrchestrator = createSubagentsOrchestrator({ pi });
+	const subAgentsOrchestrator = createSubagentsOrchestrator({
+		pi,
+		resolveAccess: () => (pi.getActiveTools().includes(PLAN_EXIT_TOOL) ? "read-only" : "full"),
+	});
 
 	pi.registerTool({
 		name: "list_available_subagents",
@@ -24,7 +28,7 @@ export default function subAgentsExtension(pi: ExtensionAPI) {
 		name: "subagent_execute",
 		label: "Subagent Execute",
 		description:
-			"Run a discovered specialized subagent in an isolated Pi process with full coding tools. The subagent can edit files and execute shell commands.",
+			"Run a discovered specialized subagent in an isolated Pi process. It uses full coding tools normally and native read-only tools in plan mode.",
 		promptSnippet: "Delegate a task to a specialized isolated subagent",
 		promptGuidelines: [
 			"After list_available_subagents finds a subagent whose description matches the task, call subagent_execute with its exact prompt path and a focused task.",
