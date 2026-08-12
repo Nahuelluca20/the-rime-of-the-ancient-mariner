@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Changed
+
+- Renamed the plan-mode startup flag from `--plan` to `--with-plan`; the old flag is no longer accepted.
+
 ### Fixed
 
 - Kept subagent discovery and execution available in plan mode while restricting child sessions to native read-only tools.

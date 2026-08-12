@@ -13,7 +13,7 @@ export default function planModeExtension(pi: ExtensionAPI) {
 		planTemplatePath: join(baseDir, "..", "prompts", "plan.md"),
 	});
 
-	pi.registerFlag("plan", {
+	pi.registerFlag("with-plan", {
 		description: "Start in native plan mode (read-only planning)",
 		type: "boolean",
 		default: false,
@@ -32,7 +32,7 @@ export default function planModeExtension(pi: ExtensionAPI) {
 	});
 
 	pi.on("session_start", async (_event, ctx) => {
-		planMode.restore(ctx, pi.getFlag("plan") === true);
+		planMode.restore(ctx, pi.getFlag("with-plan") === true);
 	});
 
 	pi.events.on(SUBAGENTS_AVAILABILITY_CHANGED_EVENT, (data) => {
