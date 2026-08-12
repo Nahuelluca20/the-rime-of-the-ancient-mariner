@@ -66,7 +66,7 @@ Supported `sessionType` values are `implementation`, `code-exploration`, `implem
 | `/session-info` | Print current session metadata (ID, file, name, CWD, entries) |
 | `/plan-mode [on\|off\|toggle\|status]` | Toggle native read-only plan mode |
 | `Shift+Tab` | Toggle native read-only plan mode, if `Shift+Tab` is not already bound to a built-in pi action |
-| `--plan` (flag) | Start pi with plan mode enabled from the start |
+| `--with-plan` (flag) | Start pi with plan mode enabled from the start |
 
 ### Memory Library
 
