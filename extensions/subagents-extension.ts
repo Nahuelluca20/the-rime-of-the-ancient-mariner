@@ -1,6 +1,7 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { PLAN_EXIT_TOOL } from "../src/plan-mode/session.ts";
+import { openSubagentsPreference } from "../src/subagents/preferences.ts";
 import { openSubagentsSession } from "../src/subagents/session.ts";
 import { createSubagentsOrchestrator } from "../src/subagents/subagents-orchestrator.ts";
 
@@ -11,7 +12,7 @@ export default function subAgentsExtension(pi: ExtensionAPI) {
 		default: false,
 	});
 
-	const subagents = openSubagentsSession(pi);
+	const subagents = openSubagentsSession(pi, openSubagentsPreference());
 	const subAgentsOrchestrator = createSubagentsOrchestrator({
 		pi,
 		resolveAccess: () => (pi.getActiveTools().includes(PLAN_EXIT_TOOL) ? "read-only" : "full"),

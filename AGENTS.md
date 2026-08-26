@@ -44,7 +44,7 @@ the-ancient-mariner/
 │   ├── ui/
 │   │   └── memory-browser.ts  # MemoryBrowserDialog: searchable memory library overlay
 │   └── db/
-│       └── connection.ts      # openDb() — internal; only memory/repository imports it
+│       └── connection.ts      # openDb() — internal; feature persistence modules import it
 ├── extensions/                # pi extensions (runtime-loaded; not compiled)
 │   ├── lifecycle.ts           # session_start + optional local resources_discover
 │   ├── memory-extension.ts        # tools backed by src/memory
@@ -162,7 +162,7 @@ Canonical examples in this repo:
 - **`src/memory/types.ts`** — public type re-exports. Consumers import from here, not from `schema.ts`.
 - **`src/memory/repository.ts`** — `MemoryRepository` owns persistence-only operations. Reads use `findProject()` and never create rows; writes use `ensureProject()` when a parent project row is needed.
 - **`src/memory/catalog.ts`** — `MemoryCatalog` owns browsing projections such as recent-memory previews.
-- **`src/db/connection.ts`** — `openDb(path)` opens better-sqlite3, wraps in Drizzle, runs migrations. Internal; only `memory/repository.ts` imports it. Extensions never touch Drizzle directly.
+- **`src/db/connection.ts`** — `openDb(path)` opens better-sqlite3, wraps in Drizzle, runs migrations. Internal; feature-level persistence modules import it. Extensions never touch Drizzle directly.
 
 Schema change workflow:
 1. Edit `src/memory/schema.ts`
