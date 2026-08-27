@@ -1,13 +1,17 @@
 import { describe, expect, test } from "bun:test";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import type { SubagentsPreference } from "../../src/subagents/preferences.ts";
 import {
 	SUBAGENTS_AVAILABILITY_CHANGED_EVENT,
 	openSubagentsSession,
 } from "../../src/subagents/session.ts";
 
-function createHarness(hasUI = true) {
+function createHarness(hasUI = true, preferenceEnabled = false) {
 	const toolNames = ["read", "list_available_subagents", "subagent_execute"];
 	let activeTools = [...toolNames];
+	let savedPreference = preferenceEnabled;
+	let preferenceError: Error | undefined;
+	const preferenceWrites: boolean[] = [];
 	const statuses: Array<[string, string | undefined]> = [];
 	const notifications: Array<[string, string | undefined]> = [];
 	const events: Array<[string, unknown]> = [];
@@ -36,12 +40,25 @@ function createHarness(hasUI = true) {
 		},
 	} as unknown as ExtensionContext;
 
+	const preference: SubagentsPreference = {
+		isEnabled: () => savedPreference,
+		setEnabled(enabled) {
+			if (preferenceError) throw preferenceError;
+			savedPreference = enabled;
+			preferenceWrites.push(enabled);
+		},
+	};
+
 	return {
 		activeTools: () => activeTools,
 		ctx,
 		events,
 		notifications,
-		session: openSubagentsSession(pi),
+		preferenceWrites,
+		setPreferenceError(error: Error | undefined) {
+			preferenceError = error;
+		},
+		session: openSubagentsSession(pi, preference),
 		statuses,
 	};
 }
@@ -58,26 +75,43 @@ describe("openSubagentsSession", () => {
 		expect(events.at(-1)).toEqual([SUBAGENTS_AVAILABILITY_CHANGED_EVENT, { enabled: false }]);
 	});
 
-	test("starts enabled when requested", () => {
-		const { activeTools, ctx, session, statuses } = createHarness();
+	test("restores the persisted preference unless startup forces subagents on", () => {
+		const persisted = createHarness(true, true);
+		persisted.session.restore(persisted.ctx, false);
+		expect(persisted.activeTools()).toEqual([
+			"read",
+			"list_available_subagents",
+			"subagent_execute",
+		]);
 
-		session.restore(ctx, true);
-
-		expect(activeTools()).toEqual(["read", "list_available_subagents", "subagent_execute"]);
-		expect(statuses.at(-1)).toEqual(["subagents", "subagents: on"]);
+		const forced = createHarness(true, false);
+		forced.session.restore(forced.ctx, true);
+		expect(forced.activeTools()).toEqual(["read", "list_available_subagents", "subagent_execute"]);
+		expect(forced.preferenceWrites).toEqual([]);
 	});
 
-	test("toggles both tools and notifies the user", () => {
-		const { activeTools, ctx, notifications, session } = createHarness();
+	test("toggles both tools, persists the choice, and notifies the user", () => {
+		const { activeTools, ctx, notifications, preferenceWrites, session } = createHarness();
 		session.restore(ctx, false);
 
 		session.toggle(ctx);
 		expect(activeTools()).toEqual(["read", "list_available_subagents", "subagent_execute"]);
+		expect(preferenceWrites).toEqual([true]);
 		expect(notifications.at(-1)).toEqual(["Subagents enabled.", "info"]);
 
 		session.toggle(ctx);
 		expect(activeTools()).toEqual(["read"]);
+		expect(preferenceWrites).toEqual([true, false]);
 		expect(notifications.at(-1)).toEqual(["Subagents disabled.", "info"]);
+	});
+
+	test("leaves runtime state unchanged when persisting a toggle fails", () => {
+		const { activeTools, ctx, session, setPreferenceError } = createHarness();
+		session.restore(ctx, false);
+		setPreferenceError(new Error("disk full"));
+
+		expect(() => session.toggle(ctx)).toThrow("disk full");
+		expect(activeTools()).toEqual(["read"]);
 	});
 
 	test("blocks stale subagent calls only while disabled", () => {
@@ -98,14 +132,14 @@ describe("openSubagentsSession", () => {
 		expect(session.blockToolCall({ toolName: "subagent_execute" })).toBeUndefined();
 	});
 
-	test("restore resets a runtime toggle from the startup flag", () => {
+	test("restore retains a persisted runtime toggle", () => {
 		const { activeTools, ctx, session } = createHarness();
 		session.restore(ctx, false);
 		session.toggle(ctx);
 
 		session.restore(ctx, false);
 
-		expect(activeTools()).toEqual(["read"]);
+		expect(activeTools()).toEqual(["read", "list_available_subagents", "subagent_execute"]);
 	});
 
 	test("skips UI output when no UI is available", () => {

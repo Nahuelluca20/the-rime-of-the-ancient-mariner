@@ -1,4 +1,5 @@
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import type { SubagentsPreference } from "./preferences.ts";
 
 export const SUBAGENT_TOOL_NAMES = ["list_available_subagents", "subagent_execute"] as const;
 export const SUBAGENTS_AVAILABILITY_CHANGED_EVENT = "subagents:availability-changed";
@@ -23,7 +24,10 @@ export interface SubagentsSession {
 	blockToolCall(event: SubagentsToolCall): SubagentsToolBlockResult | undefined;
 }
 
-export function openSubagentsSession(pi: ExtensionAPI): SubagentsSession {
+export function openSubagentsSession(
+	pi: ExtensionAPI,
+	preference: SubagentsPreference,
+): SubagentsSession {
 	let enabled = false;
 
 	function availableSubagentTools(): string[] {
@@ -60,12 +64,14 @@ export function openSubagentsSession(pi: ExtensionAPI): SubagentsSession {
 	}
 
 	function restore(ctx: ExtensionContext, startEnabled: boolean): void {
-		enabled = startEnabled;
+		enabled = startEnabled || preference.isEnabled();
 		apply(ctx);
 	}
 
 	function toggle(ctx: ExtensionContext): void {
-		enabled = !enabled;
+		const nextEnabled = !enabled;
+		preference.setEnabled(nextEnabled);
+		enabled = nextEnabled;
 		apply(ctx);
 		if (ctx.hasUI) {
 			ctx.ui.notify(`Subagents ${enabled ? "enabled" : "disabled"}.`, "info");
