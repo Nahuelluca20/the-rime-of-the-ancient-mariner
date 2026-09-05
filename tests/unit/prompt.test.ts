@@ -18,18 +18,19 @@ describe("stripFrontmatter", () => {
 });
 
 describe("renderPlanPrompt", () => {
-	test("strips frontmatter and substitutes all placeholders", () => {
-		const template = "---\nx: y\n---\nInfo: ${planInfo}\nTask: $@ and again $@";
-		const output = renderPlanPrompt(template, { planInfo: "PI", task: "  do it  " });
+	test("strips frontmatter and substitutes all plan-info placeholders", () => {
+		const template = "---\nx: y\n---\nInfo: ${planInfo}\nAgain: ${planInfo}\nTask: $@";
+		const output = renderPlanPrompt(template, { planInfo: "PI" });
 
-		expect(output).toBe("Info: PI\nTask: do it and again do it");
+		expect(output).toBe("Info: PI\nAgain: PI\nTask: $@");
 	});
 });
 
 describe("buildPlanInfo", () => {
-	test("interpolates the read-only tool list", () => {
-		const output = buildPlanInfo(["read", "grep"]);
-		expect(output).toContain("Available read-only tools: read, grep.");
+	test("describes enforcement and plan exit without listing tools", () => {
+		const output = buildPlanInfo();
+		expect(output).toContain("Native enforcement blocks");
 		expect(output).toContain("plan_exit");
+		expect(output).not.toContain("Available read-only tools");
 	});
 });
