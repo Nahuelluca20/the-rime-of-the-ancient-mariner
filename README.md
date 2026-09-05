@@ -95,7 +95,7 @@ Submitted memories are formatted with the same context renderer used by the `ins
 
 ### Plan Mode
 
-Plan mode is a native read-only mode that blocks all filesystem writes, code edits, config changes, and unsafe bash commands. Its prompt guides the human and agent through System Architecture, Program Design, and end-to-end Vertical Slices, with explicit alignment checkpoints between phases. The final plan requires implementation to stop after every slice for human review. The agent can only use read-only tools (`read`, `grep`, `find`, `ls`, safe `bash` commands, etc.) and must call `plan_exit` to request user approval before leaving.
+Plan mode is a native read-only mode that blocks all filesystem writes, code edits, config changes, and unsafe bash commands. Its compact internal prompt guides the human and agent through System Architecture, Program Design, and end-to-end Vertical Slices, with explicit alignment checkpoints between phases. The final plan requires implementation to stop after every slice for human review. The agent can only use read-only tools (`read`, `grep`, `find`, `ls`, safe `bash` commands, etc.) and must call `plan_exit` to request user approval before leaving.
 
 The extension registers `Shift+Tab` as a shortcut for toggling plan mode. In default pi, `Shift+Tab` is already bound to `app.thinking.cycle`, so users who want the plan-mode shortcut must remap that built-in action in `~/.pi/agent/keybindings.json` to avoid a collision:
 
@@ -126,12 +126,12 @@ After editing the file, run `/reload` in pi. With the example above, `Shift+Tab`
 | Skill | Description |
 |-------|-------------|
 | `save-summary` | Triggered via `/save-summary` — classifies the session type, distills title/description/context/tags, and persists via `save_session_summary` |
+| `plan-design-guide` | Detailed planning artifacts: architecture diagrams, call stacks, file trees, contracts, vertical slices, and approval checkpoints |
 
 ### Prompts
 
 | Prompt | Description |
 |--------|-------------|
-| `plan.md` | Collaborative planning through System Architecture, Program Design, and reviewable Vertical Slices |
 | `subagent-codebase-search.md` | Isolated read-only research handoff with optional architecture, program-design, and focused code excerpts |
 | `explore-codebase.md` | Read-only `code-exploration` workflow for codebase orientation |
 | `explore-implementation.md` | Read-only `implementation-exploration` workflow for comparing approaches before coding |
@@ -173,12 +173,13 @@ the-rime-of-the-ancient-mariner/
 ├── skills/                 # pi skills (Markdown)
 │   └── save-summary.md
 ├── prompts/                # pi prompt templates (Markdown)
-│   ├── plan.md
 │   ├── subagent-codebase-search.md
 │   ├── explore-codebase.md
 │   ├── explore-implementation.md
 │   ├── understand-code.md
 │   └── save-summary.md
+├── resources/              # Internal extension resources (not pi prompt templates)
+│   └── plan-system.md      # Compact plan-mode system prompt
 ├── migrations/             # Drizzle-generated SQL migrations
 └── dist/                   # Compiled output (gitignored, vestigial)
 ```

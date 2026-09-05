@@ -1,9 +1,12 @@
 import { describe, expect, test } from "bun:test";
+import { fileURLToPath } from "node:url";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import planModeExtension from "../../extensions/plan-mode.ts";
 import { openPlanModeSession } from "../../src/plan-mode/session.ts";
 
-function createHarness(options: { hasUI?: boolean; approved?: boolean } = {}) {
+function createHarness(
+	options: { hasUI?: boolean; approved?: boolean; systemPromptPath?: string } = {},
+) {
 	const toolNames = [
 		"read",
 		"bash",
@@ -59,7 +62,9 @@ function createHarness(options: { hasUI?: boolean; approved?: boolean } = {}) {
 		pi,
 		confirmations,
 		ctx,
-		session: openPlanModeSession(pi, { planTemplatePath: "/unused/plan.md" }),
+		session: openPlanModeSession(pi, {
+			systemPromptPath: options.systemPromptPath ?? "/unused/plan-system.md",
+		}),
 	};
 }
 
@@ -169,6 +174,21 @@ describe("openPlanModeSession", () => {
 			expect(harness.activeTools()).toContain("write");
 		});
 	}
+
+	test("injects the compact system prompt without a task placeholder", async () => {
+		const { ctx, session } = createHarness({
+			systemPromptPath: fileURLToPath(new URL("../../resources/plan-system.md", import.meta.url)),
+		});
+
+		session.handleCommand("on", ctx);
+		const result = await session.beforeAgentStart({ systemPrompt: "Base prompt" });
+
+		expect(result?.systemPrompt).toContain("Plan collaboratively:");
+		expect(result?.systemPrompt).toContain("Native pi plan mode is active");
+		expect(result?.systemPrompt).not.toContain("${planInfo}");
+		expect(result?.systemPrompt).not.toContain("$@");
+		expect(result?.systemPrompt).toContain("Base prompt");
+	});
 
 	test("does not enable subagent tools when entering plan mode", () => {
 		const { activeTools, ctx, session } = createHarness();

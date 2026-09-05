@@ -31,7 +31,7 @@ const READ_ONLY_TOOLS = [
 ];
 
 export interface PlanModeOptions {
-	planTemplatePath: string;
+	systemPromptPath: string;
 }
 
 export interface PlanModeState {
@@ -46,7 +46,6 @@ export interface PlanModeToolCall {
 }
 
 export interface PlanModeBeforeAgentStart {
-	prompt: string;
 	systemPrompt: string;
 }
 
@@ -247,10 +246,9 @@ export function openPlanModeSession(pi: ExtensionAPI, options: PlanModeOptions):
 	): Promise<{ systemPrompt: string } | undefined> {
 		if (!enabled) return undefined;
 
-		const template = await readFile(options.planTemplatePath, "utf8");
+		const template = await readFile(options.systemPromptPath, "utf8");
 		const renderedPrompt = renderPlanPrompt(template, {
-			task: event.prompt,
-			planInfo: buildPlanInfo(availableTools(readOnlyTools())),
+			planInfo: buildPlanInfo(),
 		});
 
 		return {

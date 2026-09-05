@@ -10,7 +10,7 @@ import {
 export default function planModeExtension(pi: ExtensionAPI) {
 	const baseDir = dirname(fileURLToPath(import.meta.url));
 	const planMode = openPlanModeSession(pi, {
-		planTemplatePath: join(baseDir, "..", "prompts", "plan.md"),
+		systemPromptPath: join(baseDir, "..", "resources", "plan-system.md"),
 	});
 
 	pi.registerFlag("with-plan", {
