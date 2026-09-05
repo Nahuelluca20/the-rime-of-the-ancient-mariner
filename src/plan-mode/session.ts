@@ -62,7 +62,7 @@ export interface PlanModeSession {
 	setSubagentsEnabled(enabled: boolean): void;
 	beforeAgentStart(event: PlanModeBeforeAgentStart): Promise<{ systemPrompt: string } | undefined>;
 	blockToolCall(event: PlanModeToolCall): ToolBlockResult | undefined;
-	handleAgentEnd(ctx: ExtensionContext): Promise<void>;
+	handleAgentSettled(ctx: ExtensionContext): Promise<void>;
 }
 
 interface CustomEntryLike {
@@ -282,7 +282,7 @@ export function openPlanModeSession(pi: ExtensionAPI, options: PlanModeOptions):
 		return undefined;
 	}
 
-	async function handleAgentEnd(ctx: ExtensionContext): Promise<void> {
+	async function handleAgentSettled(ctx: ExtensionContext): Promise<void> {
 		if (!enabled || !exitRequested) return;
 
 		if (!ctx.hasUI) {
@@ -301,12 +301,21 @@ export function openPlanModeSession(pi: ExtensionAPI, options: PlanModeOptions):
 		}
 
 		const approved = await ctx.ui.confirm(
-			"Leave plan mode?",
-			"The agent called plan_exit. Restore the previous write-capable tools?",
+			"Approve plan and start implementation?",
+			"Restore the previous write-capable tools and begin implementing the approved plan?",
 		);
 
 		if (approved) {
 			leave(ctx);
+			pi.sendMessage(
+				{
+					customType: "plan-mode-execute",
+					content:
+						"The user approved the plan. Plan mode is off. Begin implementing the approved plan, respecting its scope and review checkpoints. Implement only the first approved vertical slice, run its checks, summarize the changes, and stop for human review before continuing.",
+					display: true,
+				},
+				{ triggerTurn: true, deliverAs: "followUp" },
+			);
 			return;
 		}
 
@@ -353,6 +362,6 @@ export function openPlanModeSession(pi: ExtensionAPI, options: PlanModeOptions):
 		setSubagentsEnabled,
 		beforeAgentStart,
 		blockToolCall,
-		handleAgentEnd,
+		handleAgentSettled,
 	};
 }

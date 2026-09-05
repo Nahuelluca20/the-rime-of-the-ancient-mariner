@@ -47,7 +47,8 @@ export default function planModeExtension(pi: ExtensionAPI) {
 
 	pi.on("tool_call", async (event) => planMode.blockToolCall(event));
 
-	pi.on("agent_end", async (_event, ctx) => {
-		await planMode.handleAgentEnd(ctx);
+	// agent_end still runs inside the active loop; start implementation only after it settles.
+	pi.on("agent_settled", async (_event, ctx) => {
+		await planMode.handleAgentSettled(ctx);
 	});
 }

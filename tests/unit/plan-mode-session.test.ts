@@ -1,8 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import planModeExtension from "../../extensions/plan-mode.ts";
 import { openPlanModeSession } from "../../src/plan-mode/session.ts";
 
-function createHarness() {
+function createHarness(options: { hasUI?: boolean; approved?: boolean } = {}) {
 	const toolNames = [
 		"read",
 		"bash",
@@ -14,7 +15,19 @@ function createHarness() {
 	];
 	let activeTools = [...toolNames];
 	const entries: Array<{ type: string; customType: string; data: unknown }> = [];
+	const messages: Array<{
+		message: Parameters<ExtensionAPI["sendMessage"]>[0];
+		options: Parameters<ExtensionAPI["sendMessage"]>[1];
+		activeTools: string[];
+	}> = [];
+	const confirmations: string[] = [];
 	const pi = {
+		sendMessage(
+			message: Parameters<ExtensionAPI["sendMessage"]>[0],
+			options: Parameters<ExtensionAPI["sendMessage"]>[1],
+		) {
+			messages.push({ message, options, activeTools: [...activeTools] });
+		},
 		appendEntry(customType: string, data: unknown) {
 			entries.push({ type: "custom", customType, data });
 		},
@@ -25,18 +38,138 @@ function createHarness() {
 		},
 	} as unknown as ExtensionAPI;
 	const ctx = {
-		hasUI: false,
+		hasUI: options.hasUI ?? false,
+		ui: {
+			confirm: async (title: string) => {
+				confirmations.push(title);
+				return options.approved ?? false;
+			},
+			notify() {},
+			setStatus() {},
+			setWidget() {},
+			getEditorComponent: () => undefined,
+			setEditorComponent() {},
+		},
 		sessionManager: { getBranch: () => entries },
 	} as unknown as ExtensionContext;
 
 	return {
 		activeTools: () => activeTools,
+		messages,
+		pi,
+		confirmations,
 		ctx,
 		session: openPlanModeSession(pi, { planTemplatePath: "/unused/plan.md" }),
 	};
 }
 
 describe("openPlanModeSession", () => {
+	async function requestExit(harness: ReturnType<typeof createHarness>) {
+		await harness.session.planExitTool().execute("exit", {}, undefined, undefined, harness.ctx);
+	}
+
+	test("extension waits for agent_settled before approval and execution", async () => {
+		const harness = createHarness({ hasUI: true, approved: true });
+		const handlers = new Map<string, (event: unknown, ctx: ExtensionContext) => Promise<void>>();
+		let exitTool: ReturnType<typeof harness.session.planExitTool> | undefined;
+		Object.assign(harness.pi, {
+			registerFlag() {},
+			registerCommand() {},
+			registerShortcut() {},
+			registerTool(tool: NonNullable<typeof exitTool>) {
+				exitTool = tool;
+			},
+			getFlag: () => true,
+			events: { on() {} },
+			on(name: string, handler: (event: unknown, ctx: ExtensionContext) => Promise<void>) {
+				handlers.set(name, handler);
+			},
+		});
+		planModeExtension(harness.pi);
+		await handlers.get("session_start")?.({}, harness.ctx);
+		expect(exitTool).toBeDefined();
+		await exitTool?.execute("exit", {}, undefined, undefined, harness.ctx);
+
+		await handlers.get("agent_end")?.({}, harness.ctx);
+		expect(handlers.has("agent_end")).toBe(false);
+		expect(harness.confirmations).toHaveLength(0);
+		expect(harness.messages).toHaveLength(0);
+		expect(harness.activeTools()).not.toContain("write");
+
+		expect(handlers.has("agent_settled")).toBe(true);
+		await handlers.get("agent_settled")?.({}, harness.ctx);
+		await handlers.get("agent_settled")?.({}, harness.ctx);
+		expect(harness.confirmations).toHaveLength(1);
+		expect(harness.messages).toHaveLength(1);
+		expect(harness.messages[0].options).toEqual({ triggerTurn: true, deliverAs: "followUp" });
+		expect(harness.messages[0].activeTools).toContain("write");
+	});
+
+	test("approval restores tools before starting implementation exactly once", async () => {
+		const harness = createHarness({ hasUI: true, approved: true });
+		const { session, ctx, messages, confirmations } = harness;
+		session.handleCommand("on", ctx);
+		await requestExit(harness);
+		expect(messages).toHaveLength(0);
+
+		await session.handleAgentSettled(ctx);
+		await session.handleAgentSettled(ctx);
+
+		expect(confirmations).toEqual(["Approve plan and start implementation?"]);
+		expect(messages).toHaveLength(1);
+		expect(messages[0].message).toEqual({
+			customType: "plan-mode-execute",
+			content:
+				"The user approved the plan. Plan mode is off. Begin implementing the approved plan, respecting its scope and review checkpoints. Implement only the first approved vertical slice, run its checks, summarize the changes, and stop for human review before continuing.",
+			display: true,
+		});
+		expect(messages[0].options).toEqual({ triggerTurn: true, deliverAs: "followUp" });
+		expect(messages[0].activeTools).toContain("edit");
+		expect(messages[0].activeTools).toContain("write");
+		expect(messages[0].activeTools).not.toContain("plan_exit");
+		expect(session.blockToolCall({ toolName: "write", input: {} })).toBeUndefined();
+	});
+
+	test("rejection or cancellation keeps planning active without execution", async () => {
+		const harness = createHarness({ hasUI: true, approved: false });
+		harness.session.handleCommand("on", harness.ctx);
+		await requestExit(harness);
+		await harness.session.handleAgentSettled(harness.ctx);
+		await harness.session.handleAgentSettled(harness.ctx);
+
+		expect(harness.messages).toHaveLength(0);
+		expect(harness.confirmations).toHaveLength(1);
+		expect(harness.activeTools()).not.toContain("write");
+	});
+
+	test("without UI exit only reports that approval is unavailable", async () => {
+		const harness = createHarness();
+		harness.session.handleCommand("on", harness.ctx);
+		await requestExit(harness);
+		await harness.session.handleAgentSettled(harness.ctx);
+		await harness.session.handleAgentSettled(harness.ctx);
+
+		expect(harness.confirmations).toHaveLength(0);
+		expect(harness.messages).toHaveLength(1);
+		expect(harness.messages[0].message.customType).toBe("plan-mode-exit-requested");
+		expect(harness.messages[0].options).toEqual({ triggerTurn: false });
+		expect(harness.activeTools()).not.toContain("write");
+	});
+
+	for (const command of ["off", "toggle"]) {
+		test(`manual ${command} clears pending exit without starting implementation`, async () => {
+			const harness = createHarness({ hasUI: true, approved: true });
+			harness.session.handleCommand("on", harness.ctx);
+			await requestExit(harness);
+			harness.session.handleCommand(command, harness.ctx);
+			await harness.session.handleAgentSettled(harness.ctx);
+
+			expect(harness.messages).toHaveLength(0);
+			expect(harness.confirmations).toHaveLength(0);
+			expect(harness.activeTools()).toContain("write");
+		});
+	}
+
 	test("does not enable subagent tools when entering plan mode", () => {
 		const { activeTools, ctx, session } = createHarness();
 
